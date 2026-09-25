@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Historial del motor</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#eef1f3;--card:#fff;--ink:#12202b;--mute:#5f6e7a;--line:#d3dce2;--ac:#0b6e8a}
+@media (prefers-color-scheme:dark){:root{--bg:#0b1218;--card:#141e27;--ink:#e9eef2;--mute:#90a0ac;--line:#2a3845}}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 "Space Grotesk",sans-serif;padding:24px 16px}
+main{max-width:520px;margin:0 auto}
+h1{font-size:1.5rem;margin:0 0 4px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-top:14px}
+.muted{color:var(--mute)}
+.job{border-top:1px solid var(--line);padding-top:10px;margin-top:10px}
+</style>
+</head>
+<body>
+<main id="m">Cargando…</main>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="config.js"></script>
+<script>
+var CFG=window.SCOTTO_CONFIG;
+var sb=window.supabase.createClient(CFG.SUPABASE_URL,CFG.SUPABASE_ANON_KEY);
+function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
+(async function(){
+  var token=new URLSearchParams(location.search).get("token");
+  var m=document.getElementById("m");
+  if(!token){m.innerHTML="Falta el código del QR.";return}
+  var r=await sb.rpc("historial_publico",{token:token});
+  if(r.error||!r.data){m.innerHTML="No se encontró el historial.";return}
+  var d=r.data;
+  var h="<h1>"+esc(d.taller)+"</h1><p class='muted'>Historial digital de mantenimiento</p>";
+  h+="<div class='card'><b>"+esc(d.motor)+"</b><br><span class='muted'>"+esc(d.medidor||0)+"</span></div>";
+  h+="<div class='card'><h2 style='margin:0 0 6px;font-size:1.05rem'>Servicios realizados</h2>";
+  h+=(d.servicios&&d.servicios.length)?d.servicios.map(function(s){return "<div class='job'><b>"+new Date(s.fecha).toLocaleDateString("es-AR")+"</b><br>"+esc(s.trabajos||"Sin detalle")+"</div>"}).join(""):"<p class='muted'>Todavía no hay servicios registrados.</p>";
+  h+="</div>";
+  m.innerHTML=h;
+})();
+</script>
+</body>
+</html>
