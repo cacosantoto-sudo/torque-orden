@@ -81,7 +81,7 @@ async function boot(){
 }
 function esPago(){return !!(S.taller&&S.taller.plan==="pago")}
 async function cargarTalleres(){
-  var r=await sb.from("miembros").select("rol, talleres(id,nombre,rubro,logo_url,plan)");
+  var r=await sb.from("miembros").select("rol, talleres(id,nombre,rubro,logo_url,plan,telefono,direccion,instagram,maps_url)");
   if(r.error){renderError(r.error);return}
   S.talleres=(r.data||[]).map(function(x){return Object.assign({rol:x.rol},x.talleres)});
   if(!S.talleres.length){renderCrearTaller();return}
@@ -90,7 +90,7 @@ async function cargarTalleres(){
   document.getElementById("salir").onclick=function(){sb.auth.signOut()};
   document.getElementById("brand").innerHTML=esc(S.taller.nombre)+" <span class='tag' style='background:"+(esPago()?"var(--ok)":"transparent")+";color:"+(esPago()?"#fff":"#cfe0ea")+";border-color:#cfe0ea;font-size:.7rem;vertical-align:middle'>"+(esPago()?"PLAN PAGO":"PLAN GRATIS")+"</span>";
   nv.classList.remove("hide");
-  nv.innerHTML=["panel","clientes","ordenes","stock","caja","plan"].map(function(v){return "<button data-v='"+v+"'>"+({panel:"Panel",clientes:"Clientes",ordenes:"Órdenes",stock:"Stock",caja:"Caja",plan:"Mi Plan"})[v]+"</button>"}).join("");
+  nv.innerHTML=["panel","clientes","ordenes","stock","caja","plan","config"].map(function(v){return "<button data-v='"+v+"'>"+({panel:"Panel",clientes:"Clientes",ordenes:"Órdenes",stock:"Stock",caja:"Caja",plan:"Mi Plan",config:"Configuración"})[v]+"</button>"}).join("");
   nv.querySelectorAll("button").forEach(function(b){b.onclick=function(){S.vista=b.dataset.v;S.orden=null;route()}});
   route();
 }
@@ -119,15 +119,21 @@ async function auth(modo){
 function renderCrearTaller(){
   document.getElementById("userbar").innerHTML="<button class='btn o' id='salir' style='padding:6px 12px;min-height:32px'>Salir</button>";
   document.getElementById("salir").onclick=function(){sb.auth.signOut()};
-  m.innerHTML="<div class='centerbox card'><h1>Creá tu taller</h1><p class='muted'>Es único, después podés cambiarlo desde Configuración.</p>"+
+  m.innerHTML="<div class='centerbox card'><h1>Creá tu taller</h1><p class='muted'>Es único, después podés cambiar todo esto desde Configuración.</p>"+
    "<div id='st' class='status hide'></div>"+
    "<label for='nom'>Nombre del taller</label><input id='nom' placeholder='SCOTTO Mecánica Náutica'>"+
    "<label for='rub'>Rubro</label><select id='rub'><option value='nautica'>Náutica</option><option value='motos'>Motos</option><option value='autos'>Autos</option></select>"+
+   "<label for='logoIni'>Logo (opcional, lo podés agregar después)</label><input type='file' id='logoIni' accept='image/*'>"+
    "<div class='btns'><button class='btn' id='cr'>Crear</button></div></div>";
   document.getElementById("cr").onclick=async function(){
    var nom=document.getElementById("nom").value.trim();if(!nom){say("st","Ponele un nombre al taller.",true);return}
    var r=await sb.rpc("crear_taller",{p_nombre:nom,p_rubro:document.getElementById("rub").value});
    if(r.error){say("st",r.error.message,true);return}
+   var logoFile=document.getElementById("logoIni").files[0];
+   if(logoFile){
+    var logoUrl=await subirLogo(r.data,logoFile);
+    if(logoUrl)await sb.rpc("actualizar_datos_taller",{p_taller_id:r.data,p_nombre:nom,p_telefono:null,p_direccion:null,p_instagram:null,p_maps_url:null,p_logo_url:logoUrl});
+   }
    await cargarTalleres();
   };
 }
@@ -143,6 +149,7 @@ function route(){
   else if(S.vista==="stock")renderStock();
   else if(S.vista==="caja")renderCaja();
   else if(S.vista==="plan")renderPlan();
+  else if(S.vista==="config")renderConfig();
   nv.querySelectorAll("button").forEach(function(b){b.setAttribute("aria-current",b.dataset.v===S.vista||((S.vista==="ordenForm"||S.vista==="postForm"||S.vista==="presuForm")&&b.dataset.v==="ordenes"))});
 }
 
@@ -169,7 +176,7 @@ async function renderClientes(){
   h+=S.clientes.map(function(c){
    var eq=(c.equipos||[]).map(function(e){var mot=(e.motores||[]).map(function(mo){return "<div class='lr' style='margin-top:6px'><span class='muted'>"+esc([mo.marca,mo.modelo].filter(Boolean).join(" "))+" · "+medidorLabel().toLowerCase()+": "+esc(mo.medidor||0)+"</span><button class='btn o' data-qr='"+mo.qr_token+"' style='padding:4px 10px;min-height:0'>Ver QR</button></div>"}).join("")||"<span class='muted'>Sin motor cargado.</span>";
     return "<div style='margin-top:8px'><b>"+esc(e.nombre)+"</b>"+mot+"<button class='btn o' data-motor='"+e.id+"' style='margin-top:6px;padding:6px 12px;min-height:0'>+ Motor</button></div>"}).join("")||"<button class='btn o' data-equipo='"+c.id+"'>+ "+equipoLabel()+"</button>";
-   return "<div class='card'><b>"+esc(c.nombre)+"</b><br><span class='muted'>"+esc(c.telefono||"")+"</span>"+eq+"<div style='margin-top:8px'><button class='btn o' data-equipo='"+c.id+"' style='padding:6px 12px;min-height:0'>+ "+equipoLabel()+"</button></div></div>"
+   return "<div class='card'><div class='lr'><b>"+esc(c.nombre)+"</b><button class='btn d' data-del-cliente='"+c.id+"' style='padding:6px 12px;min-height:0'>Eliminar</button></div><span class='muted'>"+esc(c.telefono||"")+"</span>"+eq+"<div style='margin-top:8px'><button class='btn o' data-equipo='"+c.id+"' style='padding:6px 12px;min-height:0'>+ "+equipoLabel()+"</button></div></div>"
   }).join("");
   document.getElementById("box").outerHTML=h;
   document.getElementById("ca").onclick=async function(){
@@ -179,6 +186,14 @@ async function renderClientes(){
   m.querySelectorAll("[data-equipo]").forEach(function(b){b.onclick=function(){nuevoEquipo(b.dataset.equipo)}});
   m.querySelectorAll("[data-motor]").forEach(function(b){b.onclick=function(){nuevoMotor(b.dataset.motor)}});
   m.querySelectorAll("[data-qr]").forEach(function(b){b.onclick=function(){verQR(b.dataset.qr)}});
+  m.querySelectorAll("[data-del-cliente]").forEach(function(b){b.onclick=function(){eliminarCliente(b.dataset.delCliente)}});
+}
+async function eliminarCliente(id){
+  var c=S.clientes.find(function(x){return x.id===id});
+  if(!confirm("¿Eliminar a "+(c?c.nombre:"este cliente")+"? Esto también borra "+equipoLabel().toLowerCase()+"s y motores cargados a su nombre. No se puede deshacer."))return;
+  var r=await sb.from("clientes").delete().eq("id",id);
+  if(r.error){alert(r.error.message);return}
+  renderClientes();
 }
 async function nuevoEquipo(clienteId){
   var nom=prompt(equipoLabel()+" (nombre):");if(!nom)return;
@@ -193,8 +208,9 @@ async function nuevoMotor(equipoId){
 }
 function verQR(token){
   var url=location.origin+location.pathname.replace(/index\.html$/,"")+"historial.html?token="+token;
+  var stickerUrl=location.origin+location.pathname.replace(/index\.html$/,"")+"sticker.html?token="+token;
   var img="https://api.qrserver.com/v1/create-qr-code/?size=220x220&data="+encodeURIComponent(url);
-  m.insertAdjacentHTML("afterbegin","<div class='card qr'><b>Historial digital</b><img src='"+img+"' alt='Código QR'><a class='link' href='"+url+"' target='_blank'>"+url+"</a><button class='btn o' onclick='this.closest(\".card\").remove()'>Cerrar</button></div>");
+  m.insertAdjacentHTML("afterbegin","<div class='card qr'><b>Historial digital</b><img src='"+img+"' alt='Código QR'><a class='link' href='"+url+"' target='_blank'>"+url+"</a><div class='btns'><a class='btn o' href='"+stickerUrl+"' target='_blank'>🖨 Sticker para imprimir</a><button class='btn o' onclick='this.closest(\".card\").remove()'>Cerrar</button></div></div>");
 }
 
 /* ---------------- órdenes: lista ---------------- */
@@ -617,6 +633,64 @@ function renderPlan(){
    document.getElementById("brand").innerHTML=esc(S.taller.nombre)+" <span class='tag' style='vertical-align:middle;font-size:.7rem'>PLAN GRATIS</span>";
    renderPlan();
   };
+}
+
+/* ---------------- configuración del taller ---------------- */
+var nuevoLogo=null;
+function renderConfig(){
+  var t=S.taller;
+  nuevoLogo=null;
+  m.innerHTML="<h1>Configuración</h1><p class='muted'>Estos datos se muestran en la ficha pública que ve el cliente al escanear el QR.</p>"+
+   "<div class='card'><h2>Logo</h2><div id='logoPrev'>"+(t.logo_url?"<img src='"+esc(t.logo_url)+"' alt='Logo actual' style='max-width:120px;border-radius:10px'>":"<span class='muted'>Todavía no cargaste un logo.</span>")+"</div>"+
+   "<input type='file' id='logoFile' accept='image/*' style='margin-top:10px'></div>"+
+   "<div class='card'>"+
+   "<label for='cnom'>Nombre del taller</label><input id='cnom' value=\""+esc(t.nombre)+"\">"+
+   "<label for='ctel'>Teléfono</label><input id='ctel' value=\""+esc(t.telefono||"")+"\">"+
+   "<label for='cdir'>Dirección</label><input id='cdir' value=\""+esc(t.direccion||"")+"\">"+
+   "<label for='cinsta'>Instagram (usuario, sin @)</label><input id='cinsta' value=\""+esc(t.instagram||"")+"\">"+
+   "<label for='cmaps'>Link de Google Maps</label><input id='cmaps' placeholder='https://maps.app.goo.gl/...' value=\""+esc(t.maps_url||"")+"\">"+
+   "</div>"+
+   "<div id='st' class='status hide'></div>"+
+   "<div class='btns'><button class='btn' id='guardarCfg'>Guardar</button></div>";
+  document.getElementById("logoFile").onchange=function(e){
+   var f=e.target.files[0];if(!f)return;
+   nuevoLogo=f;
+   document.getElementById("logoPrev").innerHTML="<img src='"+URL.createObjectURL(f)+"' alt='Logo nuevo' style='max-width:120px;border-radius:10px'>";
+  };
+  document.getElementById("guardarCfg").onclick=guardarConfig;
+}
+async function guardarConfig(){
+  say("st","Guardando…");
+  var logoUrl=S.taller.logo_url||null;
+  if(nuevoLogo){
+   var subida=await subirLogo(S.taller.id,nuevoLogo);
+   if(!subida){say("st","No se pudo subir el logo. Revisá que exista el bucket 'logos' en Supabase.",true);return}
+   logoUrl=subida;
+  }
+  var r=await sb.rpc("actualizar_datos_taller",{
+   p_taller_id:S.taller.id,
+   p_nombre:document.getElementById("cnom").value.trim(),
+   p_telefono:document.getElementById("ctel").value.trim()||null,
+   p_direccion:document.getElementById("cdir").value.trim()||null,
+   p_instagram:document.getElementById("cinsta").value.trim()||null,
+   p_maps_url:document.getElementById("cmaps").value.trim()||null,
+   p_logo_url:logoUrl
+  });
+  if(r.error){say("st",r.error.message,true);return}
+  Object.assign(S.taller,{nombre:document.getElementById("cnom").value.trim(),telefono:document.getElementById("ctel").value.trim(),direccion:document.getElementById("cdir").value.trim(),instagram:document.getElementById("cinsta").value.trim(),maps_url:document.getElementById("cmaps").value.trim(),logo_url:logoUrl});
+  document.getElementById("brand").innerHTML=esc(S.taller.nombre)+" <span class='tag' style='background:"+(esPago()?"var(--ok)":"transparent")+";color:"+(esPago()?"#fff":"#cfe0ea")+";border-color:#cfe0ea;font-size:.7rem;vertical-align:middle'>"+(esPago()?"PLAN PAGO":"PLAN GRATIS")+"</span>";
+  say("st","Guardado.");
+  nuevoLogo=null;
+}
+async function subirLogo(tallerId,file){
+  try{
+   var blob=await shrink(file);
+   var path=tallerId+"/logo_"+Date.now()+".jpg";
+   var up=await sb.storage.from("logos").upload(path,blob,{upsert:true});
+   if(up.error)return null;
+   var pub=sb.storage.from("logos").getPublicUrl(path);
+   return pub.data?pub.data.publicUrl:null;
+  }catch(e){return null}
 }
 
 boot();
