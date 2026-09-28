@@ -54,6 +54,7 @@ a.link{color:var(--ac);word-break:break-all}
 <main id="m">Cargando…</main>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <script src="config.js"></script>
 <script>
 var CFG=window.SCOTTO_CONFIG;
@@ -137,7 +138,8 @@ function route(){
   else if(S.vista==="ordenes")renderOrdenes();
   else if(S.vista==="ordenForm")renderOrdenForm();
   else if(S.vista==="postForm")renderPostForm();
-  nv.querySelectorAll("button").forEach(function(b){b.setAttribute("aria-current",b.dataset.v===S.vista||((S.vista==="ordenForm"||S.vista==="postForm")&&b.dataset.v==="ordenes"))});
+  else if(S.vista==="presuForm")renderPresuForm();
+  nv.querySelectorAll("button").forEach(function(b){b.setAttribute("aria-current",b.dataset.v===S.vista||((S.vista==="ordenForm"||S.vista==="postForm"||S.vista==="presuForm")&&b.dataset.v==="ordenes"))});
 }
 
 /* ---------------- panel ---------------- */
@@ -200,7 +202,8 @@ async function renderOrdenes(){
   h+="<div class='btns' style='margin-bottom:12px'><button class='btn' id='nueva'>Nueva orden</button></div>";
   h+=(r.data||[]).map(function(o){var cls=o.estado==="Listo"||o.estado==="Entregado"?"g":o.estado==="En reparación"?"w":"";
    var post=(o.estado==="Listo"||o.estado==="Entregado")?"<button class='btn o' data-post='"+o.id+"' style='padding:6px 12px;min-height:0;margin-top:8px'>📸 Post para Instagram</button>":"";
-   return "<div class='card'><button class='item' data-id='"+o.id+"'><span><b>OT "+String(o.numero).padStart(6,"0")+"</b> · "+esc(o.clientes?o.clientes.nombre:"Sin cliente")+"<br><span class='muted'>"+esc(o.equipos?o.equipos.nombre:"")+"</span></span><span class='tag "+cls+"'>"+esc(o.estado)+"</span></button>"+post+"</div>"}).join("")||"<p class='muted'>Sin órdenes todavía.</p>";
+   var presu="<button class='btn o' data-presu='"+o.id+"' style='padding:6px 12px;min-height:0;margin-top:8px;margin-left:8px'>💰 Presupuesto</button>";
+   return "<div class='card'><button class='item' data-id='"+o.id+"'><span><b>OT "+String(o.numero).padStart(6,"0")+"</b> · "+esc(o.clientes?o.clientes.nombre:"Sin cliente")+"<br><span class='muted'>"+esc(o.equipos?o.equipos.nombre:"")+"</span></span><span class='tag "+cls+"'>"+esc(o.estado)+"</span></button>"+post+presu+"</div>"}).join("")||"<p class='muted'>Sin órdenes todavía.</p>";
   document.getElementById("box").outerHTML=h;
   document.getElementById("nueva").onclick=function(){S.orden={estado:"Recibido"};S.vista="ordenForm";route()};
   m.querySelectorAll("[data-id]").forEach(function(b){b.onclick=async function(){
@@ -211,6 +214,12 @@ async function renderOrdenes(){
    var r=await sb.from("ordenes").select("*, equipos(nombre), motores(marca,modelo)").eq("id",b.dataset.post).single();
    if(r.error){alert(r.error.message);return}
    S.orden=r.data;S.vista="postForm";route()}});
+  m.querySelectorAll("[data-presu]").forEach(function(b){b.onclick=function(){abrirPresupuesto(b.dataset.presu)}});
+}
+async function abrirPresupuesto(ordenId){
+  var r=await sb.from("ordenes").select("*, clientes(nombre,telefono), equipos(nombre), motores(marca,modelo)").eq("id",ordenId).single();
+  if(r.error){alert(r.error.message);return}
+  S.orden=r.data;S.vista="presuForm";route();
 }
 
 /* ---------------- órdenes: formulario ---------------- */
@@ -233,7 +242,7 @@ async function renderOrdenForm(){
   h+="<label for='f_medidor'>"+medidorLabel()+"</label><input id='f_medidor' inputmode='decimal' value='"+esc(o.medidor)+"'>";
   h+="<label for='f_estado'>Estado</label><select id='f_estado'>"+ESTADOS.map(function(e){return "<option"+(e===o.estado?" selected":"")+">"+e+"</option>"}).join("")+"</select></div>";
   h+="<div class='card'><h2>Fotos</h2><div id='ph'>"+(o.id?"<span class='muted'>Cargando fotos…</span>":"<span class='muted'>Se guardan al guardar la orden.</span>")+"</div></div>";
-  h+="<div class='btns'><button class='btn' id='save'>Guardar orden</button><button class='btn o' id='back'>Volver</button></div>";
+  h+="<div class='btns'><button class='btn' id='save'>Guardar orden</button>"+(o.id?"<button class='btn o' id='presu'>💰 Presupuesto</button>":"")+"<button class='btn o' id='back'>Volver</button></div>";
   m.innerHTML=h;
   m.querySelectorAll("[data-mic]").forEach(function(b){b.onclick=function(){micField(b)}});
   document.getElementById("dictar").onclick=startFull;
@@ -243,7 +252,7 @@ async function renderOrdenForm(){
   document.getElementById("dstop").onclick=function(){stopRec();document.getElementById("dbox").classList.add("hide")};
   document.getElementById("save").onclick=guardarOrden;
   document.getElementById("back").onclick=function(){stopRec();S.vista="ordenes";route()};
-  if(o.id)cargarFotos(o.id);
+  if(o.id){cargarFotos(o.id);document.getElementById("presu").onclick=function(){abrirPresupuesto(o.id)}}
 }
 async function cargarFotos(ordenId){
   var r=await sb.from("fotos").select("id,ruta,resumen").eq("orden_id",ordenId);
@@ -372,6 +381,106 @@ async function generarPost(){
    say("st","Listo. Copiá el texto que más te guste, y las fotos marcadas arriba las guardás desde el celular para subirlas junto con el texto.")
   }catch(e){say("st","No se pudo generar el texto. Probá de nuevo.",true)}
   document.getElementById("gen").disabled=false;
+}
+
+/* ---------------- presupuesto ---------------- */
+function money(n){return "$"+Number(n||0).toLocaleString("es-AR",{minimumFractionDigits:2,maximumFractionDigits:2})}
+function calcTotal(){return S.presu.items.reduce(function(s,it){return s+(Number(it.cantidad)||0)*(Number(it.precio)||0)},0)}
+async function renderPresuForm(){
+  var o=S.orden;
+  m.innerHTML="<h1>Presupuesto</h1><p class='muted'>OT "+String(o.numero).padStart(6,"0")+" · "+esc(o.clientes?o.clientes.nombre:"Sin cliente")+"</p><div id='box'>Cargando…</div>";
+  var r=await sb.from("presupuestos").select("*").eq("orden_id",o.id).maybeSingle();
+  S.presu=r.data||{items:[],total:0,aprobado:false};
+  if(!S.presu.items||!S.presu.items.length)S.presu.items=[{descripcion:"",cantidad:1,precio:0}];
+  pintarPresu();
+}
+function pintarPresu(){
+  var box=document.getElementById("box");
+  var h="<div class='card'><h2>Ítems</h2><div id='items'>"+S.presu.items.map(function(it,i){
+    return "<div class='card' style='padding:10px;margin-bottom:8px'>"+
+      "<label for='d_"+i+"'>Descripción</label><input id='d_"+i+"' data-f='descripcion' data-i='"+i+"' value=\""+esc(it.descripcion)+"\">"+
+      "<div class='lr' style='gap:8px;margin-top:8px;align-items:flex-end'>"+
+       "<div style='flex:1'><label for='c_"+i+"'>Cantidad</label><input id='c_"+i+"' data-f='cantidad' data-i='"+i+"' inputmode='decimal' value='"+esc(it.cantidad)+"'></div>"+
+       "<div style='flex:1'><label for='p_"+i+"'>Precio unit.</label><input id='p_"+i+"' data-f='precio' data-i='"+i+"' inputmode='decimal' value='"+esc(it.precio)+"'></div>"+
+      "</div>"+
+      "<div class='lr' style='margin-top:8px'><span class='muted'>Subtotal: <span id='sub_"+i+"'>"+money((Number(it.cantidad)||0)*(Number(it.precio)||0))+"</span></span><button class='btn d' data-del='"+i+"' style='padding:6px 12px;min-height:0'>Quitar</button></div>"+
+    "</div>"
+  }).join("")+"</div>";
+  h+="<button class='btn o' id='add'>+ Agregar ítem</button>";
+  h+="<div class='lr' style='margin-top:16px;font-size:1.2rem;font-weight:700'><span>Total</span><span id='tot'>"+money(calcTotal())+"</span></div></div>";
+  h+="<div id='st' class='status hide'></div>";
+  h+="<div class='btns'>"+
+    "<button class='btn' id='guardar'>Guardar presupuesto</button>"+
+    "<button class='btn o' id='pdf'>Generar PDF</button>"+
+    "<button class='btn o' id='wa'>Enviar por WhatsApp</button>"+
+    (S.presu.aprobado?"<span class='tag g' style='align-self:center'>Aprobado</span>":"<button class='btn' id='aprobar' style='background:var(--ok)'>Aprobar presupuesto</button>")+
+    "<button class='btn o' id='back'>Volver</button>"+
+  "</div>";
+  box.innerHTML=h;
+  box.querySelectorAll("[data-f]").forEach(function(el){el.oninput=function(){
+    var i=Number(el.dataset.i),f=el.dataset.f;
+    S.presu.items[i][f]=(f==="descripcion")?el.value:el.value;
+    var sub=(Number(S.presu.items[i].cantidad)||0)*(Number(S.presu.items[i].precio)||0);
+    var subEl=document.getElementById("sub_"+i);if(subEl)subEl.textContent=money(sub);
+    var totEl=document.getElementById("tot");if(totEl)totEl.textContent=money(calcTotal());
+  }});
+  box.querySelectorAll("[data-del]").forEach(function(b){b.onclick=function(){S.presu.items.splice(Number(b.dataset.del),1);if(!S.presu.items.length)S.presu.items=[{descripcion:"",cantidad:1,precio:0}];pintarPresu()}});
+  document.getElementById("add").onclick=function(){S.presu.items.push({descripcion:"",cantidad:1,precio:0});pintarPresu()};
+  document.getElementById("guardar").onclick=guardarPresupuesto;
+  document.getElementById("pdf").onclick=generarPDF;
+  document.getElementById("wa").onclick=enviarWhatsApp;
+  document.getElementById("back").onclick=function(){S.vista="ordenes";route()};
+  var apBtn=document.getElementById("aprobar");if(apBtn)apBtn.onclick=aprobarPresupuesto;
+}
+async function guardarPresupuesto(){
+  say("st","Guardando…");
+  var data={taller_id:S.taller.id,orden_id:S.orden.id,items:S.presu.items,total:calcTotal()};
+  var r=await sb.from("presupuestos").upsert(data,{onConflict:"orden_id"}).select().single();
+  if(r.error){say("st",r.error.message,true);return null}
+  S.presu=r.data;say("st","Presupuesto guardado.");return r.data;
+}
+function generarPDF(){
+  if(!window.jspdf){say("st","No se pudo cargar el generador de PDF.",true);return}
+  var o=S.orden;
+  var doc=new window.jspdf.jsPDF();
+  doc.setFontSize(16);doc.text(String(S.taller.nombre),14,18);
+  doc.setFontSize(11);doc.text("Presupuesto - OT "+String(o.numero).padStart(6,"0"),14,26);
+  doc.text("Cliente: "+(o.clientes?o.clientes.nombre:"-"),14,34);
+  doc.text(equipoLabel()+": "+(o.equipos?o.equipos.nombre:"-"),14,40);
+  var y=52;
+  doc.setFontSize(10);
+  doc.text("Descripción",14,y);doc.text("Cant.",120,y);doc.text("P. Unit.",145,y);doc.text("Subtotal",175,y);
+  y+=4;doc.line(14,y,196,y);y+=8;
+  S.presu.items.forEach(function(it){
+    doc.text(String(it.descripcion||"").slice(0,45),14,y);
+    doc.text(String(it.cantidad||0),120,y);
+    doc.text(money(it.precio),145,y);
+    doc.text(money((Number(it.cantidad)||0)*(Number(it.precio)||0)),175,y);
+    y+=7;
+    if(y>270){doc.addPage();y=20}
+  });
+  y+=4;doc.line(14,y,196,y);y+=10;
+  doc.setFontSize(13);doc.text("Total: "+money(calcTotal()),140,y);
+  doc.save("presupuesto_OT"+String(o.numero).padStart(6,"0")+".pdf");
+}
+function enviarWhatsApp(){
+  var o=S.orden;
+  var tel=(o.clientes&&o.clientes.telefono)?String(o.clientes.telefono).replace(/[^0-9]/g,""):"";
+  var lineas=S.presu.items.map(function(it){return "• "+it.descripcion+" x"+it.cantidad+" = "+money((Number(it.cantidad)||0)*(Number(it.precio)||0))}).join("\n");
+  var msg="Presupuesto "+S.taller.nombre+" - OT "+String(o.numero).padStart(6,"0")+"\n\n"+lineas+"\n\nTotal: "+money(calcTotal());
+  var url=tel?("https://wa.me/"+tel+"?text="+encodeURIComponent(msg)):("https://api.whatsapp.com/send?text="+encodeURIComponent(msg));
+  window.open(url,"_blank");
+}
+async function aprobarPresupuesto(){
+  var saved=await guardarPresupuesto();
+  if(!saved)return;
+  var r=await sb.from("presupuestos").update({aprobado:true}).eq("id",saved.id).select().single();
+  if(r.error){say("st",r.error.message,true);return}
+  S.presu=r.data;
+  await sb.from("ordenes").update({estado:"Aprobado"}).eq("id",S.orden.id);
+  S.orden.estado="Aprobado";
+  pintarPresu();
+  say("st","Presupuesto aprobado. La orden pasó a estado Aprobado.");
 }
 
 boot();
