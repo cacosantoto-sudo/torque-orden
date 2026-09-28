@@ -686,7 +686,7 @@ async function subirLogo(tallerId,file){
   try{
    var blob=await shrink(file);
    var path=tallerId+"/logo_"+Date.now()+".jpg";
-   var up=await sb.storage.from("logos").upload(path,blob,{upsert:true});
+   var up=await sb.storage.from("logos").upload(path,blob,{contentType:"image/jpeg"});
    if(up.error)return null;
    var pub=sb.storage.from("logos").getPublicUrl(path);
    return pub.data?pub.data.publicUrl:null;
