@@ -2,13 +2,31 @@
 // datos de una orden ya terminada. No incluye datos del cliente (nombre,
 // teléfono, matrícula/patente) para no publicar información privada.
 
+async function tienePlanPago(tallerId, accessToken) {
+  const url = process.env.SUPABASE_URL, key = process.env.SUPABASE_ANON_KEY;
+  if (!url || !key || !tallerId || !accessToken) return false;
+  try {
+    const r = await fetch(`${url}/rest/v1/talleres?id=eq.${tallerId}&select=plan`, {
+      headers: { apikey: key, Authorization: `Bearer ${accessToken}` }
+    });
+    if (!r.ok) return false;
+    const rows = await r.json();
+    return rows[0]?.plan === "pago";
+  } catch (e) { return false; }
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Método no permitido" });
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return res.status(500).json({ error: "Falta configurar ANTHROPIC_API_KEY en Vercel" });
 
-  const { rubro, equipo, motor, trabajos, resumenesFotos, tono } = req.body || {};
+  const { rubro, equipo, motor, trabajos, resumenesFotos, tono, taller_id, access_token } = req.body || {};
+
+  if (!(await tienePlanPago(taller_id, access_token))) {
+    return res.status(403).json({ error: "Esta función es parte del plan pago." });
+  }
+
   const rubroTxt = rubro === "motos" ? "motos" : rubro === "autos" ? "autos" : "náutica";
 
   const prompt = `Sos el community manager de un taller mecánico de ${rubroTxt} en Argentina. Con estos datos de un trabajo YA TERMINADO, armá contenido para un posteo de Instagram.
