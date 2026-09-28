@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sticker QR</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#eef1f3;--card:#fff;--ink:#12202b;--mute:#5f6e7a;--line:#d3dce2;--ac:#0b6e8a}
+@media (prefers-color-scheme:dark){:root{--bg:#0b1218;--card:#141e27;--ink:#e9eef2;--mute:#90a0ac;--line:#2a3845}}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.4 "Space Grotesk",sans-serif;padding:24px 16px;display:flex;flex-direction:column;align-items:center}
+.btn{background:var(--ac);color:#fff;border:0;border-radius:12px;padding:13px 18px;font-weight:700;min-height:48px;font:inherit;cursor:pointer;margin-top:18px}
+.hint{color:var(--mute);font-size:.9rem;max-width:320px;text-align:center;margin-top:8px}
+.sticker{width:5cm;height:5cm;background:#fff;color:#12202b;border:1px solid #ccc;border-radius:6px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:.2cm;box-sizing:border-box;text-align:center}
+.sticker img.logo{max-width:1.6cm;max-height:1.6cm;margin-bottom:.1cm}
+.sticker b{font-size:.34cm;line-height:1.1;display:block;margin-bottom:.15cm}
+.sticker img.qr{width:2.6cm;height:2.6cm}
+.sticker span{font-size:.24cm;color:#5f6e7a;margin-top:.1cm}
+@media print{
+  body{padding:0;background:#fff}
+  .btn,.hint{display:none}
+  .sticker{border:1px dashed #999}
+  @page{margin:1cm}
+}
+</style>
+</head>
+<body>
+<div id="m">Cargando…</div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="config.js"></script>
+<script>
+var CFG=window.SCOTTO_CONFIG;
+var sb=window.supabase.createClient(CFG.SUPABASE_URL,CFG.SUPABASE_ANON_KEY);
+function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
+(async function(){
+  var token=new URLSearchParams(location.search).get("token");
+  var m=document.getElementById("m");
+  if(!token){m.textContent="Falta el código del QR.";return}
+  var r=await sb.rpc("historial_publico",{token:token});
+  if(r.error||!r.data){m.textContent="No se encontró el historial.";return}
+  var d=r.data;
+  var url=location.origin+location.pathname.replace(/sticker\.html$/,"")+"historial.html?token="+token;
+  var qr="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data="+encodeURIComponent(url);
+  m.innerHTML="<div class='sticker'>"+
+    (d.logo?"<img class='logo' src='"+esc(d.logo)+"' alt=''>":"")+
+    "<b>"+esc(d.taller)+"</b>"+
+    "<img class='qr' src='"+qr+"' alt='Código QR'>"+
+    "<span>Escaneá para ver el historial</span>"+
+    "</div>"+
+    "<button class='btn' id='pr'>🖨 Imprimir</button>"+
+    "<p class='hint'>Pegalo en una etiqueta adhesiva resistente al agua y aceite. Al imprimir, elegí tamaño real (100%), sin ajustar a la página.</p>";
+  document.getElementById("pr").onclick=function(){window.print()};
+})();
+</script>
+</body>
+</html>
