@@ -89,7 +89,7 @@ async function cargarTalleres(){
   document.getElementById("salir").onclick=function(){sb.auth.signOut()};
   document.getElementById("brand").textContent=S.taller.nombre;
   nv.classList.remove("hide");
-  nv.innerHTML=["panel","clientes","ordenes"].map(function(v){return "<button data-v='"+v+"'>"+({panel:"Panel",clientes:"Clientes",ordenes:"Órdenes"})[v]+"</button>"}).join("");
+  nv.innerHTML=["panel","clientes","ordenes","stock","caja"].map(function(v){return "<button data-v='"+v+"'>"+({panel:"Panel",clientes:"Clientes",ordenes:"Órdenes",stock:"Stock",caja:"Caja"})[v]+"</button>"}).join("");
   nv.querySelectorAll("button").forEach(function(b){b.onclick=function(){S.vista=b.dataset.v;S.orden=null;route()}});
   route();
 }
@@ -139,6 +139,8 @@ function route(){
   else if(S.vista==="ordenForm")renderOrdenForm();
   else if(S.vista==="postForm")renderPostForm();
   else if(S.vista==="presuForm")renderPresuForm();
+  else if(S.vista==="stock")renderStock();
+  else if(S.vista==="caja")renderCaja();
   nv.querySelectorAll("button").forEach(function(b){b.setAttribute("aria-current",b.dataset.v===S.vista||((S.vista==="ordenForm"||S.vista==="postForm"||S.vista==="presuForm")&&b.dataset.v==="ordenes"))});
 }
 
@@ -481,6 +483,89 @@ async function aprobarPresupuesto(){
   S.orden.estado="Aprobado";
   pintarPresu();
   say("st","Presupuesto aprobado. La orden pasó a estado Aprobado.");
+}
+
+/* ---------------- stock de repuestos ---------------- */
+async function renderStock(){
+  m.innerHTML="<h1>Stock de repuestos</h1><div id='box'>Cargando…</div>";
+  var r=await sb.from("repuestos").select("*").order("nombre");
+  if(r.error){document.getElementById("box").innerHTML=esc(r.error.message);return}
+  S.repuestos=r.data||[];
+  pintarStock();
+}
+function pintarStock(){
+  var h="<div class='card'><h2>Nuevo repuesto</h2>"+
+   "<label for='rn'>Nombre</label><input id='rn'>"+
+   "<label for='rc'>Código (opcional)</label><input id='rc'>"+
+   "<div class='lr' style='gap:8px'><div style='flex:1'><label for='rcant'>Cantidad</label><input id='rcant' inputmode='decimal' value='0'></div><div style='flex:1'><label for='rmin'>Stock mínimo</label><input id='rmin' inputmode='decimal' value='0'></div></div>"+
+   "<div class='lr' style='gap:8px'><div style='flex:1'><label for='rcosto'>Precio costo</label><input id='rcosto' inputmode='decimal'></div><div style='flex:1'><label for='rventa'>Precio venta</label><input id='rventa' inputmode='decimal'></div></div>"+
+   "<div class='btns'><button class='btn' id='ragregar'>Agregar</button></div></div>";
+  h+=S.repuestos.map(function(x){
+   var bajo=Number(x.cantidad)<=Number(x.stock_minimo);
+   return "<div class='card'><div class='lr'><b>"+esc(x.nombre)+"</b>"+(bajo?"<span class='tag w'>Stock bajo</span>":"")+"</div>"+
+    (x.codigo?"<span class='muted'>Código: "+esc(x.codigo)+"</span><br>":"")+
+    "<div class='lr' style='margin-top:8px'>"+
+     "<button class='btn o' data-menos='"+x.id+"' style='padding:6px 14px;min-height:0'>−</button>"+
+     "<span style='font-weight:700;font-size:1.1rem;min-width:40px;text-align:center'>"+esc(x.cantidad)+"</span>"+
+     "<button class='btn o' data-mas='"+x.id+"' style='padding:6px 14px;min-height:0'>+</button>"+
+     "<span class='muted'>Venta: "+money(x.precio_venta)+"</span>"+
+    "</div></div>"
+  }).join("")||"<p class='muted'>Todavía no cargaste repuestos.</p>";
+  document.getElementById("box").outerHTML=h;
+  document.getElementById("ragregar").onclick=agregarRepuesto;
+  m.querySelectorAll("[data-mas]").forEach(function(b){b.onclick=function(){ajustarStock(b.dataset.mas,1)}});
+  m.querySelectorAll("[data-menos]").forEach(function(b){b.onclick=function(){ajustarStock(b.dataset.menos,-1)}});
+}
+async function agregarRepuesto(){
+  var nom=document.getElementById("rn").value.trim();if(!nom)return;
+  await sb.from("repuestos").insert({
+   taller_id:S.taller.id,nombre:nom,codigo:document.getElementById("rc").value.trim()||null,
+   cantidad:Number(document.getElementById("rcant").value)||0,
+   stock_minimo:Number(document.getElementById("rmin").value)||0,
+   precio_costo:Number(document.getElementById("rcosto").value)||null,
+   precio_venta:Number(document.getElementById("rventa").value)||null
+  });
+  renderStock();
+}
+async function ajustarStock(id,delta){
+  var it=S.repuestos.find(function(x){return x.id===id});if(!it)return;
+  var nueva=Math.max(0,Number(it.cantidad)+delta);
+  await sb.from("repuestos").update({cantidad:nueva}).eq("id",id);
+  it.cantidad=nueva;pintarStock();
+}
+
+/* ---------------- caja ---------------- */
+async function renderCaja(){
+  m.innerHTML="<h1>Caja</h1><div id='box'>Cargando…</div>";
+  var r=await sb.from("movimientos_caja").select("*, ordenes(numero)").order("creado",{ascending:false}).limit(60);
+  if(r.error){document.getElementById("box").innerHTML=esc(r.error.message);return}
+  S.movs=r.data||[];
+  pintarCaja();
+}
+function pintarCaja(){
+  var ingresos=S.movs.filter(function(x){return x.tipo==="ingreso"}).reduce(function(s,x){return s+Number(x.monto)},0);
+  var egresos=S.movs.filter(function(x){return x.tipo==="egreso"}).reduce(function(s,x){return s+Number(x.monto)},0);
+  var h="<div class='card'><div class='lr'><span class='muted'>Ingresos</span><b style='color:var(--ok)'>"+money(ingresos)+"</b></div>"+
+   "<div class='lr'><span class='muted'>Egresos</span><b style='color:var(--bad)'>"+money(egresos)+"</b></div>"+
+   "<div class='lr' style='margin-top:8px;font-size:1.2rem;font-weight:700'><span>Balance</span><span>"+money(ingresos-egresos)+"</span></div></div>";
+  h+="<div class='card'><h2>Nuevo movimiento</h2>"+
+   "<label for='mtipo'>Tipo</label><select id='mtipo'><option value='ingreso'>Ingreso</option><option value='egreso'>Egreso</option></select>"+
+   "<label for='mconcepto'>Concepto</label><input id='mconcepto' placeholder='Pago OT 000123, compra de repuestos, etc.'>"+
+   "<label for='mmonto'>Monto</label><input id='mmonto' inputmode='decimal'>"+
+   "<div id='stc' class='status hide'></div>"+
+   "<div class='btns'><button class='btn' id='magregar'>Registrar</button></div></div>";
+  h+=S.movs.map(function(x){
+   return "<div class='card' style='padding:10px 16px'><div class='lr'><span>"+esc(x.concepto)+(x.ordenes?" · OT "+String(x.ordenes.numero).padStart(6,"0"):"")+"<br><span class='muted' style='font-size:.85rem'>"+new Date(x.creado).toLocaleString("es-AR")+"</span></span><b style='color:"+(x.tipo==="ingreso"?"var(--ok)":"var(--bad)")+"'>"+(x.tipo==="ingreso"?"+":"−")+money(x.monto)+"</b></div></div>"
+  }).join("")||"<p class='muted'>Sin movimientos todavía.</p>";
+  document.getElementById("box").outerHTML=h;
+  document.getElementById("magregar").onclick=agregarMovimiento;
+}
+async function agregarMovimiento(){
+  var concepto=document.getElementById("mconcepto").value.trim();
+  var monto=Number(document.getElementById("mmonto").value);
+  if(!concepto||!(monto>0)){say("stc","Completá el concepto y un monto mayor a 0.",true);return}
+  await sb.from("movimientos_caja").insert({taller_id:S.taller.id,tipo:document.getElementById("mtipo").value,concepto:concepto,monto:monto});
+  renderCaja();
 }
 
 boot();
