@@ -1,6 +1,21 @@
 // Función de servidor (Vercel la publica sola en /api/leer-foto).
 // Usa tu clave de la API de Claude, guardada como variable de entorno ANTHROPIC_API_KEY.
 // El celular nunca ve esta clave: le habla a esta función, y esta función le habla a Claude.
+// Esta función tiene un costo real por cada uso, así que antes de llamar a Claude
+// se fija en la base de datos que el taller que pide esto tenga el plan pago.
+
+async function tienePlanPago(tallerId, accessToken) {
+  const url = process.env.SUPABASE_URL, key = process.env.SUPABASE_ANON_KEY;
+  if (!url || !key || !tallerId || !accessToken) return false;
+  try {
+    const r = await fetch(`${url}/rest/v1/talleres?id=eq.${tallerId}&select=plan`, {
+      headers: { apikey: key, Authorization: `Bearer ${accessToken}` }
+    });
+    if (!r.ok) return false;
+    const rows = await r.json();
+    return rows[0]?.plan === "pago";
+  } catch (e) { return false; }
+}
 
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Método no permitido" });
@@ -8,7 +23,12 @@ export default async function handler(req, res) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return res.status(500).json({ error: "Falta configurar ANTHROPIC_API_KEY en Vercel" });
 
-  const { modo, rubro, texto, campos, imagen } = req.body || {};
+  const { modo, rubro, texto, campos, imagen, taller_id, access_token } = req.body || {};
+
+  if (!(await tienePlanPago(taller_id, access_token))) {
+    return res.status(403).json({ error: "Esta función es parte del plan pago." });
+  }
+
   const rubroTxt = rubro === "motos" ? "motos" : rubro === "autos" ? "autos" : "náutica";
 
   let body;
