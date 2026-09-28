@@ -79,17 +79,18 @@ async function boot(){
   if(!S.session){renderAuth();return}
   await cargarTalleres();
 }
+function esPago(){return !!(S.taller&&S.taller.plan==="pago")}
 async function cargarTalleres(){
-  var r=await sb.from("miembros").select("rol, talleres(id,nombre,rubro,logo_url)");
+  var r=await sb.from("miembros").select("rol, talleres(id,nombre,rubro,logo_url,plan)");
   if(r.error){renderError(r.error);return}
   S.talleres=(r.data||[]).map(function(x){return Object.assign({rol:x.rol},x.talleres)});
   if(!S.talleres.length){renderCrearTaller();return}
   S.taller=S.talleres[0];
   document.getElementById("userbar").innerHTML="<span class='muted' style='color:#cfe0ea'>"+esc(S.session.user.email)+"</span> <button class='btn o' id='salir' style='padding:6px 12px;min-height:32px;margin-left:10px'>Salir</button>";
   document.getElementById("salir").onclick=function(){sb.auth.signOut()};
-  document.getElementById("brand").textContent=S.taller.nombre;
+  document.getElementById("brand").innerHTML=esc(S.taller.nombre)+" <span class='tag' style='background:"+(esPago()?"var(--ok)":"transparent")+";color:"+(esPago()?"#fff":"#cfe0ea")+";border-color:#cfe0ea;font-size:.7rem;vertical-align:middle'>"+(esPago()?"PLAN PAGO":"PLAN GRATIS")+"</span>";
   nv.classList.remove("hide");
-  nv.innerHTML=["panel","clientes","ordenes","stock","caja"].map(function(v){return "<button data-v='"+v+"'>"+({panel:"Panel",clientes:"Clientes",ordenes:"Órdenes",stock:"Stock",caja:"Caja"})[v]+"</button>"}).join("");
+  nv.innerHTML=["panel","clientes","ordenes","stock","caja","plan"].map(function(v){return "<button data-v='"+v+"'>"+({panel:"Panel",clientes:"Clientes",ordenes:"Órdenes",stock:"Stock",caja:"Caja",plan:"Mi Plan"})[v]+"</button>"}).join("");
   nv.querySelectorAll("button").forEach(function(b){b.onclick=function(){S.vista=b.dataset.v;S.orden=null;route()}});
   route();
 }
@@ -141,6 +142,7 @@ function route(){
   else if(S.vista==="presuForm")renderPresuForm();
   else if(S.vista==="stock")renderStock();
   else if(S.vista==="caja")renderCaja();
+  else if(S.vista==="plan")renderPlan();
   nv.querySelectorAll("button").forEach(function(b){b.setAttribute("aria-current",b.dataset.v===S.vista||((S.vista==="ordenForm"||S.vista==="postForm"||S.vista==="presuForm")&&b.dataset.v==="ordenes"))});
 }
 
@@ -235,7 +237,7 @@ async function renderOrdenForm(){
   h+="<div class='big'><button id='dictar'>🎤 Dictar la orden</button><button id='foto'>📷 Foto de datos</button></div>";
   h+="<input type='file' id='file' accept='image/*' capture='environment' class='hide'>";
   h+="<div id='st' class='status hide'></div>";
-  h+="<div id='dbox' class='card hide'><h2>Lo que dijiste</h2><textarea id='trans'></textarea><div class='btns'><button class='btn' id='proc'>Completar campos</button><button class='btn o' id='dstop'>Cancelar</button></div></div>";
+  h+="<div id='dbox' class='card hide'><h2>Lo que dijiste</h2><textarea id='trans'></textarea><div class='btns'>"+(esPago()?"<button class='btn' id='proc'>Completar campos</button>":"<button class='btn o' id='proc' disabled>🔒 Completar campos (Plan pago)</button>")+"<button class='btn o' id='dstop'>Cancelar</button></div>"+(esPago()?"":"<p class='muted' style='margin-top:8px'>Podés dictar y copiar el texto a mano en los campos de abajo. Completarlos automático con IA es una función del plan pago — mirá la pestaña Mi Plan.</p>")+"</div>";
   h+="<div class='card'>";
   h+="<label for='f_cliente'>Cliente</label><select id='f_cliente'><option value=''>— elegir —</option>"+clientesOpt.map(function(c){return "<option value='"+c.id+"'"+(o.cliente_id===c.id?" selected":"")+">"+esc(c.nombre)+"</option>"}).join("")+"</select>";
   [["equipo_id",equipoLabel()+" (opcional por ahora)"],].forEach(function(){});
@@ -284,10 +286,11 @@ function startFull(){
   if(!rec){btn.classList.remove("rec");btn.textContent="🎤 Dictar la orden"}}
 var CAMPOS_IA="motivo, diagnostico, trabajos, repuestos, observaciones, medidor (solo el número)";
 async function procesarTexto(){
+  if(!esPago()){say("st","Completar campos con IA es una función del plan pago.",true);return}
   var txt=document.getElementById("trans").value.trim();if(!txt){say("st","Dictá o escribí algo primero.",true);return}
   stopRec();say("st","Completando los campos…");document.getElementById("proc").disabled=true;
   try{
-   var resp=await fetch("/api/leer-foto",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({modo:"texto",rubro:S.taller.rubro,texto:txt,campos:CAMPOS_IA})});
+   var resp=await fetch("/api/leer-foto",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({modo:"texto",rubro:S.taller.rubro,texto:txt,campos:CAMPOS_IA,taller_id:S.taller.id,access_token:S.session.access_token})});
    var r=await resp.json();if(r.error)throw r.error;
    Object.keys(r).forEach(function(k){var el=document.getElementById("f_"+k);if(el&&r[k]!=null)el.value=r[k]});
    document.getElementById("dbox").classList.add("hide");say("st","Listo. Revisá los campos.")
@@ -301,10 +304,11 @@ async function procesarFoto(file){
   var blob=await shrink(file);
   fotosNuevas.push(blob);
   document.getElementById("ph").insertAdjacentHTML("beforeend","<div class='muted'>Foto agregada, se sube al guardar.</div>");
+  if(!esPago()){say("st","Foto guardada. Leer los datos de la foto con IA es una función del plan pago.");return}
   say("st","Leyendo los datos de la foto…");
   var b64=await new Promise(function(res){var fr=new FileReader();fr.onload=function(){res(fr.result.split(",")[1])};fr.readAsDataURL(blob)});
   try{
-   var resp=await fetch("/api/leer-foto",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({modo:"foto",rubro:S.taller.rubro,imagen:b64})});
+   var resp=await fetch("/api/leer-foto",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({modo:"foto",rubro:S.taller.rubro,imagen:b64,taller_id:S.taller.id,access_token:S.session.access_token})});
    var r=await resp.json();if(r.error)throw r.error;
    if(r.campos)Object.keys(r.campos).forEach(function(k){var el=document.getElementById("f_"+k);if(el&&r.campos[k]!=null&&!el.value)el.value=r.campos[k]});
    say("st","Foto procesada: "+(r.resumen||""))
@@ -342,12 +346,14 @@ async function renderPostForm(){
   m.innerHTML="<h1>Post para Instagram</h1><p class='muted'>OT "+String(o.numero).padStart(6,"0")+" · "+esc(o.equipos?o.equipos.nombre:"")+"</p>"+
    "<div id='st' class='status hide'></div>"+
    "<div class='card'><h2>1. Elegí las fotos</h2><div id='fotos'>Cargando fotos…</div></div>"+
-   "<div class='card'><h2>2. Estilo del texto</h2><select id='tono'><option value='profesional'>Profesional y técnico</option><option value='cercano'>Cercano, informal, con humor</option></select>"+
-   "<div class='btns'><button class='btn' id='gen'>Generar texto</button></div></div>"+
+   (esPago()?
+    "<div class='card'><h2>2. Estilo del texto</h2><select id='tono'><option value='profesional'>Profesional y técnico</option><option value='cercano'>Cercano, informal, con humor</option></select>"+
+    "<div class='btns'><button class='btn' id='gen'>Generar texto</button></div></div>"
+    :"<div class='card'><h2>🔒 Función del plan pago</h2><p class='muted'>Generar el texto del posteo con IA está incluido en el plan pago. Andá a la pestaña <b>Mi Plan</b> para activarlo.</p></div>")+
    "<div id='variantes'></div>"+
    "<div class='btns'><button class='btn o' id='back'>Volver</button></div>";
   document.getElementById("back").onclick=function(){S.vista="ordenes";route()};
-  document.getElementById("gen").onclick=generarPost;
+  var genBtn=document.getElementById("gen");if(genBtn)genBtn.onclick=generarPost;
   postFotos=[];postSel={};
   var r=await sb.from("fotos").select("id,ruta,resumen").eq("orden_id",o.id);
   if(r.error||!r.data||!r.data.length){document.getElementById("fotos").innerHTML="<p class='muted'>Esta orden no tiene fotos cargadas. Podés generar el texto igual.</p>";return}
@@ -364,6 +370,7 @@ async function renderPostForm(){
   document.querySelectorAll("[data-fid]").forEach(function(c){c.onchange=function(){postSel[c.dataset.fid]=c.checked}});
 }
 async function generarPost(){
+  if(!esPago()){say("st","Esta función es parte del plan pago.",true);return}
   var o=S.orden;say("st","Escribiendo el texto…");document.getElementById("gen").disabled=true;
   var resumenes=postFotos.filter(function(f){return postSel[f.id]}).map(function(f){return f.resumen}).filter(Boolean);
   try{
@@ -373,7 +380,9 @@ async function generarPost(){
     motor:o.motores?[o.motores.marca,o.motores.modelo].filter(Boolean).join(" "):"",
     trabajos:o.trabajos,
     resumenesFotos:resumenes,
-    tono:document.getElementById("tono").value
+    tono:document.getElementById("tono").value,
+    taller_id:S.taller.id,
+    access_token:S.session.access_token
    })});
    var r=await resp.json();if(r.error)throw r.error;
    document.getElementById("variantes").innerHTML=(r.variantes||[]).map(function(v,i){return "<div class='card'><h2>Opción "+(i+1)+"</h2><textarea data-v='"+i+"' style='min-height:140px'>"+esc(v.texto)+"</textarea><div class='btns'><button class='btn o' data-copy='"+i+"'>Copiar texto</button></div></div>"}).join("");
@@ -566,6 +575,48 @@ async function agregarMovimiento(){
   if(!concepto||!(monto>0)){say("stc","Completá el concepto y un monto mayor a 0.",true);return}
   await sb.from("movimientos_caja").insert({taller_id:S.taller.id,tipo:document.getElementById("mtipo").value,concepto:concepto,monto:monto});
   renderCaja();
+}
+
+/* ---------------- mi plan ---------------- */
+function renderPlan(){
+  var pago=esPago();
+  var h="<h1>Mi Plan</h1>";
+  h+="<div class='card'><div class='lr'><h2 style='margin:0'>Plan actual</h2><span class='tag "+(pago?"g":"")+"'>"+(pago?"PAGO":"GRATIS")+"</span></div></div>";
+  h+="<div class='card'><h2>Incluido en el plan Gratis</h2><ul style='margin:0;padding-left:20px;color:var(--mute)'>"+
+   "<li>Clientes, equipos y motores sin límite</li>"+
+   "<li>Órdenes de trabajo, con dictado por voz (a mano, sin IA)</li>"+
+   "<li>Fotos de las órdenes (se guardan, sin lectura automática)</li>"+
+   "<li>Historial digital por QR</li>"+
+   "<li>Presupuestos con PDF y envío por WhatsApp</li>"+
+   "<li>Stock de repuestos y Caja</li>"+
+   "</ul></div>";
+  h+="<div class='card'><h2>Se suma con el plan Pago</h2><ul style='margin:0;padding-left:20px;color:var(--mute)'>"+
+   "<li>Completar los campos de la orden automáticamente con IA (a partir de lo que dictás)</li>"+
+   "<li>Lectura automática de datos desde una foto</li>"+
+   "<li>Generador de posteos para Instagram con IA</li>"+
+   "</ul></div>";
+  h+="<div id='st' class='status hide'></div>";
+  h+="<div class='btns'>"+(pago?"<button class='btn o' id='baja'>Volver al plan gratis</button>":"<button class='btn' id='alta'>Activar plan pago</button>")+"</div>";
+  if(!pago)h+="<p class='muted' style='margin-top:10px'>Por ahora lo activás vos mismo, para que puedas probar todo. Cuando el sistema esté listo para vender a colegas, esto va a quedar atado a un cobro real (por ejemplo con Mercado Pago).</p>";
+  m.innerHTML=h;
+  var altaBtn=document.getElementById("alta");
+  if(altaBtn)altaBtn.onclick=async function(){
+   say("st","Activando…");
+   var r=await sb.rpc("activar_plan_pago",{p_taller_id:S.taller.id});
+   if(r.error){say("st",r.error.message,true);return}
+   S.taller.plan="pago";var idx=S.talleres.findIndex(function(t){return t.id===S.taller.id});if(idx>-1)S.talleres[idx].plan="pago";
+   document.getElementById("brand").innerHTML=esc(S.taller.nombre)+" <span class='tag' style='background:var(--ok);color:#fff;border-color:#cfe0ea;font-size:.7rem;vertical-align:middle'>PLAN PAGO</span>";
+   renderPlan();
+  };
+  var bajaBtn=document.getElementById("baja");
+  if(bajaBtn)bajaBtn.onclick=async function(){
+   say("st","Desactivando…");
+   var r=await sb.rpc("desactivar_plan_pago",{p_taller_id:S.taller.id});
+   if(r.error){say("st",r.error.message,true);return}
+   S.taller.plan="gratis";var idx=S.talleres.findIndex(function(t){return t.id===S.taller.id});if(idx>-1)S.talleres[idx].plan="gratis";
+   document.getElementById("brand").innerHTML=esc(S.taller.nombre)+" <span class='tag' style='vertical-align:middle;font-size:.7rem'>PLAN GRATIS</span>";
+   renderPlan();
+  };
 }
 
 boot();
