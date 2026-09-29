@@ -270,6 +270,7 @@ var rec=null,fotosNuevas=[];
 async function renderOrdenForm(){
   fotosNuevas=[];
   var o=S.orden;
+  if(!("estado_guardado" in o))o.estado_guardado=o.id?o.estado:null;
   var clientesOpt=(S.clientes.length?S.clientes:(await sb.from("clientes").select("id,nombre")).data||[]);
   var h="<h1>"+(o.id?"OT "+String(o.numero).padStart(6,"0"):"Nueva orden")+"</h1>";
   h+="<div class='big'><button id='dictar'>🎤 Dictar la orden</button><button id='foto'>📷 Foto de datos</button></div>";
@@ -380,7 +381,53 @@ async function guardarOrden(){
    var up=await sb.storage.from("fotos").upload(path,fotosNuevas[i]);
    if(!up.error)await sb.from("fotos").insert({taller_id:S.taller.id,orden_id:ordenId,ruta:path});
   }
+  if(data.cliente_id&&data.estado!==o.estado_guardado){
+   var full=await sb.from("ordenes").select("id,numero,estado,clientes(nombre,telefono),equipos(nombre)").eq("id",ordenId).single();
+   if(full.data&&full.data.clientes&&telWa(full.data.clientes.telefono)){renderAvisoEstado(full.data);return}
+  }
   S.vista="ordenes";route();
+}
+
+/* ---------------- aviso de estado por WhatsApp ---------------- */
+function telWa(t){
+  var d=String(t||"").replace(/[^0-9]/g,"");
+  if(!d)return "";
+  if(d.indexOf("00")===0)d=d.slice(2);
+  if(d.indexOf("54")===0&&d.length>=12){if(d.charAt(2)!=="9")d="549"+d.slice(2);return d}
+  if(d.charAt(0)==="0")d=d.slice(1);
+  if(d.length===12){for(var a=2;a<=4;a++){if(d.substr(a,2)==="15"){d=d.slice(0,a)+d.slice(a+2);break}}}
+  if(d.length===10)return "549"+d;
+  return d;
+}
+function mensajeEstado(o){
+  var t=S.taller||{},nombre=o.clientes&&o.clientes.nombre?o.clientes.nombre.split(" ")[0]:"",
+      eq=o.equipos&&o.equipos.nombre?o.equipos.nombre:"tu equipo",
+      ot="OT "+String(o.numero).padStart(6,"0");
+  var cuerpo={
+   "Recibido":"Recibimos "+eq+" en el taller. Tu número de orden es "+ot+". Te avisamos cuando tengamos el diagnóstico.",
+   "Diagnóstico":"Ya estamos revisando "+eq+" ("+ot+"). En cuanto tengamos el diagnóstico te contamos.",
+   "Presupuesto":"El presupuesto de "+eq+" ("+ot+") está listo. Te lo pasamos para que lo revises.",
+   "Aprobado":"¡Gracias por aprobar el presupuesto! Arrancamos con el trabajo de "+eq+" ("+ot+").",
+   "En reparación":"Estamos trabajando en "+eq+" ("+ot+"). Te avisamos cuando esté listo.",
+   "Listo":"¡"+eq.charAt(0).toUpperCase()+eq.slice(1)+" ya está listo para retirar! ("+ot+")"+(t.direccion?"\nTe esperamos en "+t.direccion+".":""),
+   "Entregado":"Gracias por confiar en nosotros. Cualquier consulta sobre el trabajo de "+eq+" ("+ot+"), escribinos."
+  }[o.estado]||("Tu orden "+ot+" pasó a estado: "+o.estado+".");
+  return "Hola"+(nombre?" "+nombre:"")+", te escribimos de "+(t.nombre||"el taller")+".\n\n"+cuerpo;
+}
+function renderAvisoEstado(o){
+  var tel=telWa(o.clientes.telefono);
+  m.innerHTML="<h1>Orden guardada</h1>"+
+   "<div class='card'><h2>¿Avisar a "+esc(o.clientes.nombre)+" por WhatsApp?</h2>"+
+   "<p class='muted'>La orden pasó a <b>"+esc(o.estado)+"</b>. Podés editar el mensaje antes de enviarlo.</p>"+
+   "<label for='wa_msg'>Mensaje</label><textarea id='wa_msg' rows='6'>"+esc(mensajeEstado(o))+"</textarea>"+
+   "<p class='muted'>Se envía al "+esc(o.clientes.telefono)+"</p>"+
+   "<div class='btns'><a class='btn' id='wa_send' href='#' target='_blank' rel='noopener'>📲 Enviar por WhatsApp</a><button class='btn o' id='wa_skip'>No avisar</button></div></div>";
+  var send=document.getElementById("wa_send");
+  send.onclick=function(){
+   send.href="https://wa.me/"+tel+"?text="+encodeURIComponent(document.getElementById("wa_msg").value);
+   setTimeout(function(){S.vista="ordenes";route()},300);
+  };
+  document.getElementById("wa_skip").onclick=function(){S.vista="ordenes";route()};
 }
 
 /* ---------------- post para Instagram ---------------- */
@@ -530,7 +577,7 @@ function generarPDF(){
 }
 function enviarWhatsApp(){
   var o=S.orden;
-  var tel=(o.clientes&&o.clientes.telefono)?String(o.clientes.telefono).replace(/[^0-9]/g,""):"";
+  var tel=telWa(o.clientes&&o.clientes.telefono);
   var lineas=S.presu.items.map(function(it){return "• "+it.descripcion+" x"+it.cantidad+" = "+money((Number(it.cantidad)||0)*(Number(it.precio)||0))}).join("\n");
   var msg="Presupuesto "+S.taller.nombre+" - OT "+String(o.numero).padStart(6,"0")+"\n\n"+lineas+"\n\nTotal: "+money(calcTotal());
   var url=tel?("https://wa.me/"+tel+"?text="+encodeURIComponent(msg)):("https://api.whatsapp.com/send?text="+encodeURIComponent(msg));
