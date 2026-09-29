@@ -4,6 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Sistema de taller</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0f2a3d">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Taller">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -49,7 +57,7 @@ a.link{color:var(--ac);word-break:break-all}
 </style>
 </head>
 <body>
-<header><b id="brand">Scotto</b><span id="userbar"></span></header>
+<header><b id="brand">Scotto</b><span><button class="btn o hide" id="instalarApp" style="padding:6px 12px;min-height:32px;margin-right:10px">📲 Instalar app</button><span id="userbar"></span></span></header>
 <nav id="nav" class="hide"></nav>
 <main id="m">Cargando…</main>
 
@@ -778,6 +786,7 @@ function renderConfig(){
    document.getElementById("logoPrev").innerHTML="<img src='"+URL.createObjectURL(f)+"' alt='Logo nuevo' style='max-width:120px;border-radius:10px'>";
   };
   document.getElementById("guardarCfg").onclick=guardarConfig;
+  m.insertAdjacentHTML("beforeend",cardInstalarHtml());conectarInstalar();
 }
 async function guardarConfig(){
   say("st","Guardando…");
@@ -812,6 +821,36 @@ async function subirLogo(tallerId,file){
    return pub.data?pub.data.publicUrl:null;
   }catch(e){return null}
 }
+
+/* ---------------- instalar la app (PWA) ---------------- */
+var promptInstalar=null;
+document.getElementById("instalarApp").onclick=instalarApp;
+function esInstalada(){return window.matchMedia("(display-mode: standalone)").matches||navigator.standalone===true}
+function esIOS(){return /iphone|ipad|ipod/i.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1)}
+if("serviceWorker" in navigator&&location.protocol!=="file:")window.addEventListener("load",function(){navigator.serviceWorker.register("sw.js").catch(function(){})});
+window.addEventListener("beforeinstallprompt",function(e){e.preventDefault();promptInstalar=e;pintarBotonInstalar()});
+window.addEventListener("appinstalled",function(){promptInstalar=null;pintarBotonInstalar()});
+function pintarBotonInstalar(){
+  var b=document.getElementById("instalarApp");
+  if(b)b.classList.toggle("hide",!promptInstalar||esInstalada());
+  var c=document.getElementById("cardInstalar");
+  if(c){c.outerHTML=cardInstalarHtml();conectarInstalar()}
+}
+async function instalarApp(){
+  if(!promptInstalar)return;
+  promptInstalar.prompt();
+  await promptInstalar.userChoice;
+  promptInstalar=null;pintarBotonInstalar();
+}
+function cardInstalarHtml(){
+  var h="<div class='card' id='cardInstalar'><h2>📲 Instalar en el celular</h2>";
+  if(esInstalada())h+="<p class='muted'>La app ya está instalada en este dispositivo.</p>";
+  else if(promptInstalar)h+="<p class='muted'>Agregá la app a la pantalla de inicio para abrirla como cualquier otra aplicación, a pantalla completa.</p><div class='btns'><button class='btn' id='instalarCfg'>Instalar app</button></div>";
+  else if(esIOS())h+="<p class='muted'>En iPhone: abrí esta página en <b>Safari</b>, tocá el botón <b>Compartir</b> (el cuadrado con la flecha hacia arriba) y elegí <b>Agregar a pantalla de inicio</b>.</p>";
+  else h+="<p class='muted'>En Android: abrí esta página en <b>Chrome</b>, tocá el menú <b>⋮</b> y elegí <b>Instalar aplicación</b> (o <b>Agregar a pantalla de inicio</b>).</p>";
+  return h+"</div>";
+}
+function conectarInstalar(){var b=document.getElementById("instalarCfg");if(b)b.onclick=instalarApp}
 
 boot();
 </script>
