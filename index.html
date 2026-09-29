@@ -174,8 +174,8 @@ async function renderClientes(){
   S.clientes=r.data||[];
   var h="<div class='card'><h2>Nuevo cliente</h2><label for='cn'>Nombre</label><input id='cn'><label for='ct'>Teléfono</label><input id='ct'><div class='btns'><button class='btn' id='ca'>Agregar</button></div></div>";
   h+=S.clientes.map(function(c){
-   var eq=(c.equipos||[]).map(function(e){var mot=(e.motores||[]).map(function(mo){return "<div class='lr' style='margin-top:6px'><span class='muted'>"+esc([mo.marca,mo.modelo].filter(Boolean).join(" "))+" · "+medidorLabel().toLowerCase()+": "+esc(mo.medidor||0)+"</span><button class='btn o' data-qr='"+mo.qr_token+"' style='padding:4px 10px;min-height:0'>Ver QR</button></div>"}).join("")||"<span class='muted'>Sin motor cargado.</span>";
-    return "<div style='margin-top:8px'><b>"+esc(e.nombre)+"</b>"+mot+"<button class='btn o' data-motor='"+e.id+"' style='margin-top:6px;padding:6px 12px;min-height:0'>+ Motor</button></div>"}).join("")||"<button class='btn o' data-equipo='"+c.id+"'>+ "+equipoLabel()+"</button>";
+   var eq=(c.equipos||[]).map(function(e){var mot=(e.motores||[]).map(function(mo){return "<div class='lr' style='margin-top:6px'><span class='muted'>"+esc([mo.marca,mo.modelo].filter(Boolean).join(" "))+" · "+medidorLabel().toLowerCase()+": "+esc(mo.medidor||0)+"</span><span><button class='btn o' data-qr='"+mo.qr_token+"' style='padding:4px 10px;min-height:0'>Ver QR</button> <button class='btn d' data-del-motor='"+mo.id+"' style='padding:4px 10px;min-height:0'>Eliminar</button></span></div>"}).join("")||"<span class='muted'>Sin motor cargado.</span>";
+    return "<div style='margin-top:8px'><div class='lr'><b>"+esc(e.nombre)+"</b><button class='btn d' data-del-equipo='"+e.id+"' style='padding:4px 10px;min-height:0'>Eliminar "+equipoLabel().toLowerCase()+"</button></div>"+mot+"<button class='btn o' data-motor='"+e.id+"' style='margin-top:6px;padding:6px 12px;min-height:0'>+ Motor</button></div>"}).join("")||"<button class='btn o' data-equipo='"+c.id+"'>+ "+equipoLabel()+"</button>";
    return "<div class='card'><div class='lr'><b>"+esc(c.nombre)+"</b><button class='btn d' data-del-cliente='"+c.id+"' style='padding:6px 12px;min-height:0'>Eliminar</button></div><span class='muted'>"+esc(c.telefono||"")+"</span>"+eq+"<div style='margin-top:8px'><button class='btn o' data-equipo='"+c.id+"' style='padding:6px 12px;min-height:0'>+ "+equipoLabel()+"</button></div></div>"
   }).join("");
   document.getElementById("box").outerHTML=h;
@@ -187,6 +187,20 @@ async function renderClientes(){
   m.querySelectorAll("[data-motor]").forEach(function(b){b.onclick=function(){nuevoMotor(b.dataset.motor)}});
   m.querySelectorAll("[data-qr]").forEach(function(b){b.onclick=function(){verQR(b.dataset.qr)}});
   m.querySelectorAll("[data-del-cliente]").forEach(function(b){b.onclick=function(){eliminarCliente(b.dataset.delCliente)}});
+  m.querySelectorAll("[data-del-equipo]").forEach(function(b){b.onclick=function(){eliminarEquipo(b.dataset.delEquipo)}});
+  m.querySelectorAll("[data-del-motor]").forEach(function(b){b.onclick=function(){eliminarMotor(b.dataset.delMotor)}});
+}
+async function eliminarEquipo(id){
+  if(!confirm("¿Eliminar "+equipoLabel().toLowerCase()+"? Esto también borra los motores cargados ahí. No se puede deshacer."))return;
+  var r=await sb.from("equipos").delete().eq("id",id);
+  if(r.error){alert(r.error.message);return}
+  renderClientes();
+}
+async function eliminarMotor(id){
+  if(!confirm("¿Eliminar este motor? No se puede deshacer."))return;
+  var r=await sb.from("motores").delete().eq("id",id);
+  if(r.error){alert(r.error.message);return}
+  renderClientes();
 }
 async function eliminarCliente(id){
   var c=S.clientes.find(function(x){return x.id===id});
@@ -223,7 +237,8 @@ async function renderOrdenes(){
   h+=(r.data||[]).map(function(o){var cls=o.estado==="Listo"||o.estado==="Entregado"?"g":o.estado==="En reparación"?"w":"";
    var post=(o.estado==="Listo"||o.estado==="Entregado")?"<button class='btn o' data-post='"+o.id+"' style='padding:6px 12px;min-height:0;margin-top:8px'>📸 Post para Instagram</button>":"";
    var presu="<button class='btn o' data-presu='"+o.id+"' style='padding:6px 12px;min-height:0;margin-top:8px;margin-left:8px'>💰 Presupuesto</button>";
-   return "<div class='card'><button class='item' data-id='"+o.id+"'><span><b>OT "+String(o.numero).padStart(6,"0")+"</b> · "+esc(o.clientes?o.clientes.nombre:"Sin cliente")+"<br><span class='muted'>"+esc(o.equipos?o.equipos.nombre:"")+"</span></span><span class='tag "+cls+"'>"+esc(o.estado)+"</span></button>"+post+presu+"</div>"}).join("")||"<p class='muted'>Sin órdenes todavía.</p>";
+   var del="<button class='btn d' data-del-orden='"+o.id+"' style='padding:6px 12px;min-height:0;margin-top:8px;margin-left:8px'>Eliminar</button>";
+   return "<div class='card'><button class='item' data-id='"+o.id+"'><span><b>OT "+String(o.numero).padStart(6,"0")+"</b> · "+esc(o.clientes?o.clientes.nombre:"Sin cliente")+"<br><span class='muted'>"+esc(o.equipos?o.equipos.nombre:"")+"</span></span><span class='tag "+cls+"'>"+esc(o.estado)+"</span></button>"+post+presu+del+"</div>"}).join("")||"<p class='muted'>Sin órdenes todavía.</p>";
   document.getElementById("box").outerHTML=h;
   document.getElementById("nueva").onclick=function(){S.orden={estado:"Recibido"};S.vista="ordenForm";route()};
   m.querySelectorAll("[data-id]").forEach(function(b){b.onclick=async function(){
@@ -235,6 +250,13 @@ async function renderOrdenes(){
    if(r.error){alert(r.error.message);return}
    S.orden=r.data;S.vista="postForm";route()}});
   m.querySelectorAll("[data-presu]").forEach(function(b){b.onclick=function(){abrirPresupuesto(b.dataset.presu)}});
+  m.querySelectorAll("[data-del-orden]").forEach(function(b){b.onclick=function(){eliminarOrden(b.dataset.delOrden)}});
+}
+async function eliminarOrden(id){
+  if(!confirm("¿Eliminar esta orden de trabajo? Se borran también sus fotos y su presupuesto. No se puede deshacer."))return;
+  var r=await sb.from("ordenes").delete().eq("id",id);
+  if(r.error){alert(r.error.message);return}
+  renderOrdenes();
 }
 async function abrirPresupuesto(ordenId){
   var r=await sb.from("ordenes").select("*, clientes(nombre,telefono), equipos(nombre), motores(marca,modelo)").eq("id",ordenId).single();
@@ -262,7 +284,7 @@ async function renderOrdenForm(){
   h+="<label for='f_medidor'>"+medidorLabel()+"</label><input id='f_medidor' inputmode='decimal' value='"+esc(o.medidor)+"'>";
   h+="<label for='f_estado'>Estado</label><select id='f_estado'>"+ESTADOS.map(function(e){return "<option"+(e===o.estado?" selected":"")+">"+e+"</option>"}).join("")+"</select></div>";
   h+="<div class='card'><h2>Fotos</h2><div id='ph'>"+(o.id?"<span class='muted'>Cargando fotos…</span>":"<span class='muted'>Se guardan al guardar la orden.</span>")+"</div></div>";
-  h+="<div class='btns'><button class='btn' id='save'>Guardar orden</button>"+(o.id?"<button class='btn o' id='presu'>💰 Presupuesto</button>":"")+"<button class='btn o' id='back'>Volver</button></div>";
+  h+="<div class='btns'><button class='btn' id='save'>Guardar orden</button>"+(o.id?"<button class='btn o' id='presu'>💰 Presupuesto</button>":"")+"<button class='btn o' id='back'>Volver</button>"+(o.id?"<button class='btn d' id='delOrden'>Eliminar orden</button>":"")+"</div>";
   m.innerHTML=h;
   m.querySelectorAll("[data-mic]").forEach(function(b){b.onclick=function(){micField(b)}});
   document.getElementById("dictar").onclick=startFull;
@@ -272,7 +294,13 @@ async function renderOrdenForm(){
   document.getElementById("dstop").onclick=function(){stopRec();document.getElementById("dbox").classList.add("hide")};
   document.getElementById("save").onclick=guardarOrden;
   document.getElementById("back").onclick=function(){stopRec();S.vista="ordenes";route()};
-  if(o.id){cargarFotos(o.id);document.getElementById("presu").onclick=function(){abrirPresupuesto(o.id)}}
+  if(o.id){cargarFotos(o.id);document.getElementById("presu").onclick=function(){abrirPresupuesto(o.id)};document.getElementById("delOrden").onclick=function(){eliminarOrdenYVolver(o.id)}}
+}
+async function eliminarOrdenYVolver(id){
+  if(!confirm("¿Eliminar esta orden de trabajo? Se borran también sus fotos y su presupuesto. No se puede deshacer."))return;
+  var r=await sb.from("ordenes").delete().eq("id",id);
+  if(r.error){alert(r.error.message);return}
+  S.vista="ordenes";S.orden=null;route();
 }
 async function cargarFotos(ordenId){
   var r=await sb.from("fotos").select("id,ruta,resumen").eq("orden_id",ordenId);
@@ -442,6 +470,7 @@ function pintarPresu(){
     "<button class='btn o' id='wa'>Enviar por WhatsApp</button>"+
     (S.presu.aprobado?"<span class='tag g' style='align-self:center'>Aprobado</span>":"<button class='btn' id='aprobar' style='background:var(--ok)'>Aprobar presupuesto</button>")+
     "<button class='btn o' id='back'>Volver</button>"+
+    (S.presu.id?"<button class='btn d' id='delPresu'>Eliminar presupuesto</button>":"")+
   "</div>";
   box.innerHTML=h;
   box.querySelectorAll("[data-f]").forEach(function(el){el.oninput=function(){
@@ -458,6 +487,15 @@ function pintarPresu(){
   document.getElementById("wa").onclick=enviarWhatsApp;
   document.getElementById("back").onclick=function(){S.vista="ordenes";route()};
   var apBtn=document.getElementById("aprobar");if(apBtn)apBtn.onclick=aprobarPresupuesto;
+  var delBtn=document.getElementById("delPresu");if(delBtn)delBtn.onclick=eliminarPresupuesto;
+}
+async function eliminarPresupuesto(){
+  if(!S.presu.id)return;
+  if(!confirm("¿Eliminar este presupuesto? No se puede deshacer."))return;
+  var r=await sb.from("presupuestos").delete().eq("id",S.presu.id);
+  if(r.error){alert(r.error.message);return}
+  S.presu={items:[{descripcion:"",cantidad:1,precio:0}],total:0,aprobado:false};
+  pintarPresu();
 }
 async function guardarPresupuesto(){
   say("st","Guardando…");
@@ -534,12 +572,20 @@ function pintarStock(){
      "<span style='font-weight:700;font-size:1.1rem;min-width:40px;text-align:center'>"+esc(x.cantidad)+"</span>"+
      "<button class='btn o' data-mas='"+x.id+"' style='padding:6px 14px;min-height:0'>+</button>"+
      "<span class='muted'>Venta: "+money(x.precio_venta)+"</span>"+
+     "<button class='btn d' data-del-rep='"+x.id+"' style='padding:6px 12px;min-height:0'>Eliminar</button>"+
     "</div></div>"
   }).join("")||"<p class='muted'>Todavía no cargaste repuestos.</p>";
   document.getElementById("box").outerHTML=h;
   document.getElementById("ragregar").onclick=agregarRepuesto;
   m.querySelectorAll("[data-mas]").forEach(function(b){b.onclick=function(){ajustarStock(b.dataset.mas,1)}});
   m.querySelectorAll("[data-menos]").forEach(function(b){b.onclick=function(){ajustarStock(b.dataset.menos,-1)}});
+  m.querySelectorAll("[data-del-rep]").forEach(function(b){b.onclick=function(){eliminarRepuesto(b.dataset.delRep)}});
+}
+async function eliminarRepuesto(id){
+  if(!confirm("¿Eliminar este repuesto del stock? No se puede deshacer."))return;
+  var r=await sb.from("repuestos").delete().eq("id",id);
+  if(r.error){alert(r.error.message);return}
+  renderStock();
 }
 async function agregarRepuesto(){
   var nom=document.getElementById("rn").value.trim();if(!nom)return;
@@ -580,10 +626,17 @@ function pintarCaja(){
    "<div id='stc' class='status hide'></div>"+
    "<div class='btns'><button class='btn' id='magregar'>Registrar</button></div></div>";
   h+=S.movs.map(function(x){
-   return "<div class='card' style='padding:10px 16px'><div class='lr'><span>"+esc(x.concepto)+(x.ordenes?" · OT "+String(x.ordenes.numero).padStart(6,"0"):"")+"<br><span class='muted' style='font-size:.85rem'>"+new Date(x.creado).toLocaleString("es-AR")+"</span></span><b style='color:"+(x.tipo==="ingreso"?"var(--ok)":"var(--bad)")+"'>"+(x.tipo==="ingreso"?"+":"−")+money(x.monto)+"</b></div></div>"
+   return "<div class='card' style='padding:10px 16px'><div class='lr'><span>"+esc(x.concepto)+(x.ordenes?" · OT "+String(x.ordenes.numero).padStart(6,"0"):"")+"<br><span class='muted' style='font-size:.85rem'>"+new Date(x.creado).toLocaleString("es-AR")+"</span></span><span class='lr' style='gap:10px'><b style='color:"+(x.tipo==="ingreso"?"var(--ok)":"var(--bad)")+"'>"+(x.tipo==="ingreso"?"+":"−")+money(x.monto)+"</b><button class='btn d' data-del-mov='"+x.id+"' style='padding:4px 10px;min-height:0'>Eliminar</button></span></div></div>"
   }).join("")||"<p class='muted'>Sin movimientos todavía.</p>";
   document.getElementById("box").outerHTML=h;
   document.getElementById("magregar").onclick=agregarMovimiento;
+  m.querySelectorAll("[data-del-mov]").forEach(function(b){b.onclick=function(){eliminarMovimiento(b.dataset.delMov)}});
+}
+async function eliminarMovimiento(id){
+  if(!confirm("¿Eliminar este movimiento de caja? No se puede deshacer."))return;
+  var r=await sb.from("movimientos_caja").delete().eq("id",id);
+  if(r.error){alert(r.error.message);return}
+  renderCaja();
 }
 async function agregarMovimiento(){
   var concepto=document.getElementById("mconcepto").value.trim();
