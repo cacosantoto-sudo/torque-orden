@@ -62,6 +62,13 @@ var sb=window.supabase.createClient(CFG.SUPABASE_URL,CFG.SUPABASE_ANON_KEY);
 var S={session:null,talleres:[],taller:null,vista:"panel",clientes:[],equipos:[],motores:[],ordenes:[],orden:null};
 var m=document.getElementById("m"),nv=document.getElementById("nav");
 function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
+function norm(s){return String(s==null?"":s).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"")}
+function buscadorHtml(ph,val){return "<input id='buscar' type='search' placeholder='"+ph+"' value=\""+esc(val||"")+"\" autocomplete='off' style='margin-bottom:12px'>"}
+function filtrarLista(txt,extra){
+  var palabras=norm(txt).split(/\s+/).filter(Boolean),vis=0,items=m.querySelectorAll("[data-q]");
+  items.forEach(function(el){var q=el.dataset.q,ok=palabras.every(function(p){return q.indexOf(p)>=0})&&(!extra||extra(el));el.style.display=ok?"":"none";if(ok)vis++});
+  var nr=document.getElementById("sinres");if(nr)nr.classList.toggle("hide",vis>0||!items.length);
+}
 function say(id,msg,err){var s=document.getElementById(id);if(!s)return;s.className="status"+(err?" err":"");s.textContent=msg;s.classList.remove("hide")}
 function medidorLabel(){return S.taller&&S.taller.rubro==="motos"?"Kilómetros":"Horas de motor"}
 function equipoLabel(){return S.taller&&S.taller.rubro==="motos"?"Moto":"Embarcación"}
@@ -172,13 +179,19 @@ async function renderClientes(){
   var r=await sb.from("clientes").select("id,nombre,telefono,equipos(id,nombre,motores(id,marca,modelo,medidor,qr_token))").order("nombre");
   if(r.error){document.getElementById("box").innerHTML=esc(r.error.message);return}
   S.clientes=r.data||[];
-  var h="<div class='card'><h2>Nuevo cliente</h2><label for='cn'>Nombre</label><input id='cn'><label for='ct'>Teléfono</label><input id='ct'><div class='btns'><button class='btn' id='ca'>Agregar</button></div></div>";
+  var h="<div style='height:12px'></div>"+buscadorHtml("🔍 Buscar por nombre, teléfono, "+equipoLabel().toLowerCase()+" o motor",S.qClientes);
+  h+="<div class='card'><h2>Nuevo cliente</h2><label for='cn'>Nombre</label><input id='cn'><label for='ct'>Teléfono</label><input id='ct'><div class='btns'><button class='btn' id='ca'>Agregar</button></div></div>";
   h+=S.clientes.map(function(c){
    var eq=(c.equipos||[]).map(function(e){var mot=(e.motores||[]).map(function(mo){return "<div class='lr' style='margin-top:6px'><span class='muted'>"+esc([mo.marca,mo.modelo].filter(Boolean).join(" "))+" · "+medidorLabel().toLowerCase()+": "+esc(mo.medidor||0)+"</span><span><button class='btn o' data-qr='"+mo.qr_token+"' style='padding:4px 10px;min-height:0'>Ver QR</button> <button class='btn d' data-del-motor='"+mo.id+"' style='padding:4px 10px;min-height:0'>Eliminar</button></span></div>"}).join("")||"<span class='muted'>Sin motor cargado.</span>";
     return "<div style='margin-top:8px'><div class='lr'><b>"+esc(e.nombre)+"</b><button class='btn d' data-del-equipo='"+e.id+"' style='padding:4px 10px;min-height:0'>Eliminar "+equipoLabel().toLowerCase()+"</button></div>"+mot+"<button class='btn o' data-motor='"+e.id+"' style='margin-top:6px;padding:6px 12px;min-height:0'>+ Motor</button></div>"}).join("")||"<button class='btn o' data-equipo='"+c.id+"'>+ "+equipoLabel()+"</button>";
-   return "<div class='card'><div class='lr'><b>"+esc(c.nombre)+"</b><button class='btn d' data-del-cliente='"+c.id+"' style='padding:6px 12px;min-height:0'>Eliminar</button></div><span class='muted'>"+esc(c.telefono||"")+"</span>"+eq+"<div style='margin-top:8px'><button class='btn o' data-equipo='"+c.id+"' style='padding:6px 12px;min-height:0'>+ "+equipoLabel()+"</button></div></div>"
+   var q=norm([c.nombre,c.telefono,String(c.telefono||"").replace(/[^0-9]/g,"")].concat((c.equipos||[]).map(function(e){return [e.nombre].concat((e.motores||[]).map(function(mo){return mo.marca+" "+mo.modelo})).join(" ")})).join(" "));
+   return "<div class='card' data-q=\""+esc(q)+"\"><div class='lr'><b>"+esc(c.nombre)+"</b><button class='btn d' data-del-cliente='"+c.id+"' style='padding:6px 12px;min-height:0'>Eliminar</button></div><span class='muted'>"+esc(c.telefono||"")+"</span>"+eq+"<div style='margin-top:8px'><button class='btn o' data-equipo='"+c.id+"' style='padding:6px 12px;min-height:0'>+ "+equipoLabel()+"</button></div></div>"
   }).join("");
+  h+="<p id='sinres' class='muted hide'>No hay clientes que coincidan con la búsqueda.</p>";
   document.getElementById("box").outerHTML=h;
+  var bc=document.getElementById("buscar");
+  bc.oninput=function(){S.qClientes=bc.value;filtrarLista(bc.value)};
+  filtrarLista(bc.value);
   document.getElementById("ca").onclick=async function(){
    var nom=document.getElementById("cn").value.trim();if(!nom)return;
    await sb.from("clientes").insert({taller_id:S.taller.id,nombre:nom,telefono:document.getElementById("ct").value.trim()});
@@ -234,12 +247,19 @@ async function renderOrdenes(){
   if(r.error){document.getElementById("box").innerHTML=esc(r.error.message);return}
   var h=S.talleres&&S.taller?"":"";
   h+="<div class='btns' style='margin-bottom:12px'><button class='btn' id='nueva'>Nueva orden</button></div>";
+  h+=buscadorHtml("🔍 Buscar por N° de OT, cliente o "+equipoLabel().toLowerCase(),S.qOrdenes);
+  h+="<select id='festado' style='margin-bottom:12px'><option value=''>Todos los estados</option>"+ESTADOS.map(function(e){return "<option"+(e===S.fEstado?" selected":"")+">"+e+"</option>"}).join("")+"</select>";
   h+=(r.data||[]).map(function(o){var cls=o.estado==="Listo"||o.estado==="Entregado"?"g":o.estado==="En reparación"?"w":"";
    var post=(o.estado==="Listo"||o.estado==="Entregado")?"<button class='btn o' data-post='"+o.id+"' style='padding:6px 12px;min-height:0;margin-top:8px'>📸 Post para Instagram</button>":"";
    var presu="<button class='btn o' data-presu='"+o.id+"' style='padding:6px 12px;min-height:0;margin-top:8px;margin-left:8px'>💰 Presupuesto</button>";
    var del="<button class='btn d' data-del-orden='"+o.id+"' style='padding:6px 12px;min-height:0;margin-top:8px;margin-left:8px'>Eliminar</button>";
-   return "<div class='card'><button class='item' data-id='"+o.id+"'><span><b>OT "+String(o.numero).padStart(6,"0")+"</b> · "+esc(o.clientes?o.clientes.nombre:"Sin cliente")+"<br><span class='muted'>"+esc(o.equipos?o.equipos.nombre:"")+"</span></span><span class='tag "+cls+"'>"+esc(o.estado)+"</span></button>"+post+presu+del+"</div>"}).join("")||"<p class='muted'>Sin órdenes todavía.</p>";
+   var q=norm(["OT "+String(o.numero).padStart(6,"0"),o.numero,o.clientes?o.clientes.nombre:"",o.equipos?o.equipos.nombre:""].join(" "));
+   return "<div class='card' data-q=\""+esc(q)+"\" data-estado=\""+esc(o.estado)+"\"><button class='item' data-id='"+o.id+"'><span><b>OT "+String(o.numero).padStart(6,"0")+"</b> · "+esc(o.clientes?o.clientes.nombre:"Sin cliente")+"<br><span class='muted'>"+esc(o.equipos?o.equipos.nombre:"")+"</span></span><span class='tag "+cls+"'>"+esc(o.estado)+"</span></button>"+post+presu+del+"</div>"}).join("")||"<p class='muted'>Sin órdenes todavía.</p>";
+  h+="<p id='sinres' class='muted hide'>No hay órdenes que coincidan con la búsqueda.</p>";
   document.getElementById("box").outerHTML=h;
+  var bo=document.getElementById("buscar"),fe=document.getElementById("festado");
+  function aplicar(){S.qOrdenes=bo.value;S.fEstado=fe.value;filtrarLista(bo.value,fe.value?function(el){return el.dataset.estado===fe.value}:null)}
+  bo.oninput=aplicar;fe.onchange=aplicar;aplicar();
   document.getElementById("nueva").onclick=function(){S.orden={estado:"Recibido"};S.vista="ordenForm";route()};
   m.querySelectorAll("[data-id]").forEach(function(b){b.onclick=async function(){
    var r=await sb.from("ordenes").select("*").eq("id",b.dataset.id).single();
@@ -401,7 +421,7 @@ function telWa(t){
 }
 function mensajeEstado(o){
   var t=S.taller||{},nombre=o.clientes&&o.clientes.nombre?o.clientes.nombre.split(" ")[0]:"",
-      eq=o.equipos&&o.equipos.nombre?o.equipos.nombre:"tu equipo",
+      eq="tu "+(o.equipos&&o.equipos.nombre?o.equipos.nombre:equipoLabel().toLowerCase()),
       ot="OT "+String(o.numero).padStart(6,"0");
   var cuerpo={
    "Recibido":"Recibimos "+eq+" en el taller. Tu número de orden es "+ot+". Te avisamos cuando tengamos el diagnóstico.",
@@ -409,7 +429,7 @@ function mensajeEstado(o){
    "Presupuesto":"El presupuesto de "+eq+" ("+ot+") está listo. Te lo pasamos para que lo revises.",
    "Aprobado":"¡Gracias por aprobar el presupuesto! Arrancamos con el trabajo de "+eq+" ("+ot+").",
    "En reparación":"Estamos trabajando en "+eq+" ("+ot+"). Te avisamos cuando esté listo.",
-   "Listo":"¡"+eq.charAt(0).toUpperCase()+eq.slice(1)+" ya está listo para retirar! ("+ot+")"+(t.direccion?"\nTe esperamos en "+t.direccion+".":""),
+   "Listo":"¡"+eq.charAt(0).toUpperCase()+eq.slice(1)+" ya se puede retirar! ("+ot+")"+(t.direccion?"\nTe esperamos en "+t.direccion+".":""),
    "Entregado":"Gracias por confiar en nosotros. Cualquier consulta sobre el trabajo de "+eq+" ("+ot+"), escribinos."
   }[o.estado]||("Tu orden "+ot+" pasó a estado: "+o.estado+".");
   return "Hola"+(nombre?" "+nombre:"")+", te escribimos de "+(t.nombre||"el taller")+".\n\n"+cuerpo;
