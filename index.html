@@ -15,8 +15,20 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#eef1f3;--card:#fff;--ink:#12202b;--mute:#5f6e7a;--line:#d3dce2;--nav:#0f2a3d;--ac:#0b6e8a;--br:#c98a2b;--ok:#2f8f5b;--bad:#c23b2e}
-@media (prefers-color-scheme:dark){:root{--bg:#0b1218;--card:#141e27;--ink:#e9eef2;--mute:#90a0ac;--line:#2a3845;--nav:#08161f;--ac:#3fb0cf}}
+:root{--bg:#eef1f3;--card:#fff;--ink:#12202b;--mute:#5f6e7a;--line:#d3dce2;--nav:#0f2a3d;--ac:#0b6e8a;--br:#c98a2b;--ok:#2f8f5b;--bad:#c23b2e;--bar:#0a7ea4}
+@media (prefers-color-scheme:dark){:root{--bg:#0b1218;--card:#141e27;--ink:#e9eef2;--mute:#90a0ac;--line:#2a3845;--nav:#08161f;--ac:#3fb0cf;--bar:#2a9dbf}}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:12px}
+.tile{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px}
+.tile span{display:block;color:var(--mute);font-size:.85rem}.tile b{display:block;font-size:1.35rem;margin-top:2px;overflow-wrap:anywhere}
+.chart{display:flex;align-items:flex-end;gap:2px;height:170px;border-bottom:1px solid var(--line);padding-top:22px;position:relative}
+.chart .col{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:100%;cursor:default;position:relative;outline:none}
+.chart .col i{display:block;width:24px;max-width:70%;background:var(--bar);border-radius:4px 4px 0 0;min-height:0}
+.chart .col em{font-style:normal;font-size:.8rem;color:var(--ink);font-weight:600;margin-bottom:4px}
+.chart .col:hover i,.chart .col:focus i{filter:brightness(1.15)}
+.chart-x{display:flex;gap:2px}.chart-x span{flex:1;text-align:center;font-size:.78rem;color:var(--mute);padding-top:4px}
+.tip{position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:var(--nav);color:#fff;font-size:.8rem;padding:4px 8px;border-radius:6px;white-space:nowrap;pointer-events:none;display:none;z-index:2}
+.chart .col:hover .tip,.chart .col:focus .tip{display:block}
+table.t{width:100%;border-collapse:collapse;font-size:.9rem}table.t th,table.t td{padding:6px 4px;border-top:1px solid var(--line);text-align:right}table.t th:first-child,table.t td:first-child{text-align:left}
 html,body{margin:0}
 body{background:var(--bg);color:var(--ink);font:16px/1.5 "Space Grotesk",system-ui,sans-serif}
 h1,h2{margin:0;letter-spacing:-.02em}h1{font-size:1.6rem}h2{font-size:1.05rem;margin-bottom:10px}
@@ -109,7 +121,7 @@ async function cargarTalleres(){
   document.getElementById("salir").onclick=function(){sb.auth.signOut()};
   document.getElementById("brand").innerHTML=esc(S.taller.nombre)+" <span class='tag' style='background:"+(esPago()?"var(--ok)":"transparent")+";color:"+(esPago()?"#fff":"#cfe0ea")+";border-color:#cfe0ea;font-size:.7rem;vertical-align:middle'>"+(esPago()?"PLAN PAGO":"PLAN GRATIS")+"</span>";
   nv.classList.remove("hide");
-  nv.innerHTML=(esDueno()?["panel","clientes","ordenes","stock","caja","plan","config"]:["panel","clientes","ordenes","stock","config"]).map(function(v){return "<button data-v='"+v+"'>"+({panel:"Panel",clientes:"Clientes",ordenes:"Órdenes",stock:"Stock",caja:"Caja",plan:"Mi Plan",config:"Configuración"})[v]+"</button>"}).join("");
+  nv.innerHTML=(esDueno()?["panel","clientes","ordenes","stock","caja","reportes","plan","config"]:["panel","clientes","ordenes","stock","config"]).map(function(v){return "<button data-v='"+v+"'>"+({panel:"Panel",clientes:"Clientes",ordenes:"Órdenes",stock:"Stock",caja:"Caja",reportes:"Reportes",plan:"Mi Plan",config:"Configuración"})[v]+"</button>"}).join("");
   nv.querySelectorAll("button").forEach(function(b){b.onclick=function(){S.vista=b.dataset.v;S.orden=null;route()}});
   route();
 }
@@ -159,8 +171,9 @@ function renderCrearTaller(){
 
 /* ---------------- router ---------------- */
 function route(){
-  if(!esDueno()&&(S.vista==="caja"||S.vista==="plan"))S.vista="panel";
-  if(S.vista==="panel")renderPanel();
+  if(!esDueno()&&(S.vista==="caja"||S.vista==="plan"||S.vista==="reportes"))S.vista="panel";
+  if(S.vista==="reportes")renderReportes();
+  else if(S.vista==="panel")renderPanel();
   else if(S.vista==="ficha")renderFicha();
   else if(S.vista==="patente")renderPatente();
   else if(S.vista==="clientes")renderClientes();
@@ -867,6 +880,70 @@ async function agregarMovimiento(){
   if(!concepto||!(monto>0)){say("stc","Completá el concepto y un monto mayor a 0.",true);return}
   await sb.from("movimientos_caja").insert({taller_id:S.taller.id,tipo:document.getElementById("mtipo").value,concepto:concepto,monto:monto});
   renderCaja();
+}
+
+/* ---------------- reportes ---------------- */
+function pesos(n){return (n<0?"-$":"$")+Math.abs(Math.round(Number(n)||0)).toLocaleString("es-AR")}
+var MESES=["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
+function rangoPeriodo(per){
+  var h=new Date(),y=h.getFullYear(),mo=h.getMonth();
+  if(per==="mesant")return {desde:new Date(y,mo-1,1),hasta:new Date(y,mo,1),txt:"el mes pasado"};
+  if(per==="3m")return {desde:new Date(y,mo-2,1),hasta:new Date(y,mo+1,1),txt:"los últimos 3 meses"};
+  if(per==="anio")return {desde:new Date(y,0,1),hasta:new Date(y+1,0,1),txt:"este año"};
+  return {desde:new Date(y,mo,1),hasta:new Date(y,mo+1,1),txt:"este mes"};
+}
+async function renderReportes(){
+  S.repPer=S.repPer||"mes";
+  m.innerHTML="<h1>Reportes</h1><select id='repPer' style='margin:12px 0'>"+[["mes","Este mes"],["mesant","Mes pasado"],["3m","Últimos 3 meses"],["anio","Este año"]].map(function(x){return "<option value='"+x[0]+"'"+(x[0]===S.repPer?" selected":"")+">"+x[1]+"</option>"}).join("")+"</select><div id='box'>Cargando…</div>";
+  document.getElementById("repPer").onchange=function(){S.repPer=this.value;pintarReportes()};
+  var res=await Promise.all([
+   sb.from("ordenes").select("id,numero,estado,creado,cliente_id,clientes(nombre)"),
+   sb.from("movimientos_caja").select("tipo,monto,creado"),
+   sb.from("presupuestos").select("total,aprobado,creado"),
+   sb.from("repuestos").select("nombre,cantidad,stock_minimo")
+  ]);
+  var err=res.filter(function(r){return r.error})[0];
+  if(err){document.getElementById("box").innerHTML=esc(err.error.message);return}
+  S.rep={ord:res[0].data||[],caja:res[1].data||[],presu:res[2].data||[],rep:res[3].data||[]};
+  pintarReportes();
+}
+function pintarReportes(){
+  var R=S.rep,g=rangoPeriodo(S.repPer);
+  function enRango(x){var d=new Date(x.creado);return d>=g.desde&&d<g.hasta}
+  function suma(arr,tipo){return arr.filter(function(x){return x.tipo===tipo}).reduce(function(s,x){return s+Number(x.monto||0)},0)}
+  var ords=R.ord.filter(enRango),caja=R.caja.filter(enRango);
+  var entregadas=ords.filter(function(o){return o.estado==="Entregado"}).length;
+  var ing=suma(caja,"ingreso"),egr=suma(caja,"egreso");
+  var aprob=R.presu.filter(function(p){return p.aprobado&&enRango(p)}).reduce(function(s,p){return s+Number(p.total||0)},0);
+  function tile(t,v,sub){return "<div class='tile'><span>"+t+"</span><b>"+v+"</b>"+(sub?"<span>"+sub+"</span>":"")+"</div>"}
+  var h="<p class='muted' style='margin:0 0 10px'>Datos de "+g.txt+".</p><div class='tiles'>"+
+   tile("Órdenes ingresadas",ords.length,entregadas+" ya entregadas")+
+   tile("Ingresos",pesos(ing))+tile("Egresos",pesos(egr))+
+   tile("Balance",pesos(ing-egr))+tile("Presupuestos aprobados",pesos(aprob))+"</div>";
+  // en curso ahora
+  var enCurso=ESTADOS.filter(function(e){return e!=="Entregado"}).map(function(e){return [e,R.ord.filter(function(o){return o.estado===e}).length]});
+  h+="<div class='card'><h2>En el taller ahora</h2>"+enCurso.map(function(x){return "<div class='lr' style='border-top:1px solid var(--line);padding:6px 0'><span>"+x[0]+"</span><b>"+x[1]+"</b></div>"}).join("")+"</div>";
+  // últimos 6 meses
+  var hoy=new Date(),meses=[];
+  for(var i=5;i>=0;i--){var d=new Date(hoy.getFullYear(),hoy.getMonth()-i,1),d2=new Date(hoy.getFullYear(),hoy.getMonth()-i+1,1);
+   var f=function(x){var c=new Date(x.creado);return c>=d&&c<d2};
+   var cm=R.caja.filter(f);
+   meses.push({lbl:MESES[d.getMonth()],full:MESES[d.getMonth()]+" "+d.getFullYear(),n:R.ord.filter(f).length,ing:suma(cm,"ingreso"),egr:suma(cm,"egreso")})}
+  var max=Math.max.apply(null,meses.map(function(x){return x.n}))||1,imax=meses.reduce(function(b,x,i){return x.n>meses[b].n?i:b},0);
+  h+="<div class='card'><h2>Órdenes ingresadas por mes</h2><div class='chart' role='img' aria-label='Órdenes ingresadas por mes en los últimos 6 meses'>"+meses.map(function(x,i){
+    var lab=(i===meses.length-1||i===imax)&&x.n?"<em>"+x.n+"</em>":"";
+    return "<div class='col' tabindex='0'><span class='tip'>"+x.full+": "+x.n+" "+(x.n===1?"orden":"órdenes")+"</span>"+lab+"<i style='height:"+(x.n/max*100)+"%'></i></div>"}).join("")+
+   "</div><div class='chart-x'>"+meses.map(function(x){return "<span>"+x.lbl+"</span>"}).join("")+"</div>"+
+   "<details style='margin-top:10px'><summary class='muted'>Ver como tabla (con caja)</summary><table class='t'><tr><th>Mes</th><th>Órdenes</th><th>Ingresos</th><th>Egresos</th></tr>"+
+   meses.map(function(x){return "<tr><td>"+x.full+"</td><td>"+x.n+"</td><td>"+money(x.ing)+"</td><td>"+money(x.egr)+"</td></tr>"}).join("")+"</table></details></div>";
+  // mejores clientes
+  var pc={};ords.forEach(function(o){if(!o.cliente_id)return;pc[o.cliente_id]=pc[o.cliente_id]||{n:0,nom:o.clientes?o.clientes.nombre:""};pc[o.cliente_id].n++});
+  var top=Object.values(pc).sort(function(a,b){return b.n-a.n}).slice(0,5);
+  h+="<div class='card'><h2>Clientes con más órdenes</h2>"+(top.length?top.map(function(x){return "<div class='lr' style='border-top:1px solid var(--line);padding:6px 0'><span>"+esc(x.nom)+"</span><b>"+x.n+"</b></div>"}).join(""):"<span class='muted'>Sin órdenes en "+g.txt+".</span>")+"</div>";
+  // stock bajo
+  var bajo=R.rep.filter(function(x){return Number(x.cantidad)<=Number(x.stock_minimo)&&Number(x.stock_minimo)>0});
+  h+="<div class='card'><h2>Repuestos para reponer</h2>"+(bajo.length?bajo.map(function(x){return "<div class='lr' style='border-top:1px solid var(--line);padding:6px 0'><span>"+esc(x.nombre)+"</span><span class='tag w'>"+esc(x.cantidad)+" / mín. "+esc(x.stock_minimo)+"</span></div>"}).join(""):"<span class='muted'>Todo el stock está por encima del mínimo.</span>")+"</div>";
+  document.getElementById("box").innerHTML=h;
 }
 
 /* ---------------- mi plan ---------------- */
