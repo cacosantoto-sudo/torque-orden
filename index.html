@@ -177,8 +177,47 @@ async function renderPanel(){
   h+=r.data.length?r.data.map(function(o){var cls=o.estado==="Listo"||o.estado==="Entregado"?"g":o.estado==="En reparación"?"w":"";
     return "<div class='lr' style='border-top:1px solid var(--line);padding:8px 0'><span>OT "+String(o.numero).padStart(6,"0")+" · "+esc(o.clientes?o.clientes.nombre:"")+"</span><span class='tag "+cls+"'>"+esc(o.estado)+"</span></div>"}).join(""):"<p class='muted'>Todavía no hay órdenes.</p>";
   h+="</div><div class='btns'><button class='btn' id='ir'>Nueva orden</button></div>";
+  h+="<div class='card' id='recBox' style='margin-top:16px'><h2>🔔 Mantenimientos para recordar</h2><span class='muted'>Buscando…</span></div>";
   document.getElementById("box").outerHTML=h;
   document.getElementById("ir").onclick=function(){S.orden={estado:"Recibido"};S.vista="ordenForm";route()};
+  cargarRecordatorios();
+}
+
+/* ---------------- recordatorios de mantenimiento ---------------- */
+// Se calcula por tiempo: clientes cuyo último trabajo entregado tiene más de N meses
+// y que no tienen otra orden en curso. N y los "ya avisé" se guardan en este dispositivo.
+function lsGet(k,def){try{var v=localStorage.getItem(k);return v==null?def:JSON.parse(v)}catch(e){return def}}
+function lsSet(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
+function mesesRecordatorio(){return Number(lsGet("rec_meses_"+S.taller.id,S.taller.rubro==="motos"?6:12))||6}
+function mesesEntre(a,b){return (b.getFullYear()-a.getFullYear())*12+(b.getMonth()-a.getMonth())-(b.getDate()<a.getDate()?1:0)}
+async function cargarRecordatorios(){
+  var box=document.getElementById("recBox");if(!box)return;
+  var r=await sb.from("ordenes").select("id,numero,estado,creado,cliente_id,clientes(nombre,telefono),equipos(nombre)").order("creado",{ascending:false});
+  if(!document.getElementById("recBox"))return;
+  if(r.error){box.innerHTML="<h2>🔔 Mantenimientos para recordar</h2><span class='muted'>"+esc(r.error.message)+"</span>";return}
+  var meses=mesesRecordatorio(),hoy=new Date(),avisados=lsGet("rec_avisados_"+S.taller.id,{}),porCliente={};
+  (r.data||[]).forEach(function(o){if(!o.cliente_id||!o.creado)return;var c=porCliente[o.cliente_id]=porCliente[o.cliente_id]||{ultima:null,enCurso:false};
+   if(o.estado==="Entregado"){if(!c.ultima||new Date(o.creado)>new Date(c.ultima.creado))c.ultima=o}else c.enCurso=true});
+  var lista=Object.keys(porCliente).map(function(k){var c=porCliente[k];if(!c.ultima||c.enCurso)return null;
+    var hace=mesesEntre(new Date(c.ultima.creado),hoy);if(hace<meses||avisados[k]===c.ultima.id)return null;return {cid:k,o:c.ultima,hace:hace}}).filter(Boolean)
+   .sort(function(a,b){return b.hace-a.hace});
+  var h="<h2>🔔 Mantenimientos para recordar</h2><p class='muted' style='margin-top:0'>Clientes con el último trabajo entregado hace "+meses+" meses o más. Podés cambiar el plazo en Configuración.</p>";
+  h+=lista.length?lista.map(function(x){var o=x.o,tel=telWa(o.clientes&&o.clientes.telefono);
+   return "<div style='border-top:1px solid var(--line);padding:10px 0'><div class='lr'><b>"+esc(o.clientes?o.clientes.nombre:"")+"</b><span class='tag w'>hace "+x.hace+" meses</span></div>"+
+    "<span class='muted'>"+esc(o.equipos?o.equipos.nombre+" · ":"")+"último trabajo: OT "+String(o.numero).padStart(6,"0")+" ("+new Date(o.creado).toLocaleDateString("es-AR")+")</span>"+
+    "<div class='btns' style='margin-top:8px'>"+(tel?"<a class='btn' style='padding:6px 12px;min-height:0;text-decoration:none' target='_blank' rel='noopener' data-rec-wa='"+x.cid+"' href='https://wa.me/"+tel+"?text="+encodeURIComponent(mensajeRecordatorio(o,x.hace))+"'>📲 Recordar por WhatsApp</a>":"<span class='muted'>Sin teléfono cargado.</span>")+
+    "<button class='btn o' style='padding:6px 12px;min-height:0' data-rec-ok='"+x.cid+"' data-oid='"+o.id+"'>Ya avisé</button></div></div>"}).join(""):"<p class='muted'>No hay mantenimientos pendientes de recordar. 👌</p>";
+  box.innerHTML=h;
+  function marcar(cid,oid){var a=lsGet("rec_avisados_"+S.taller.id,{});a[cid]=oid;lsSet("rec_avisados_"+S.taller.id,a)}
+  box.querySelectorAll("[data-rec-ok]").forEach(function(b){b.onclick=function(){marcar(b.dataset.recOk,b.dataset.oid);cargarRecordatorios()}});
+  box.querySelectorAll("[data-rec-wa]").forEach(function(a){a.addEventListener("click",function(){var ok=a.parentNode.querySelector("[data-rec-ok]");marcar(ok.dataset.recOk,ok.dataset.oid);setTimeout(cargarRecordatorios,500)})});
+}
+function mensajeRecordatorio(o,hace){
+  var nombre=o.clientes&&o.clientes.nombre?o.clientes.nombre.split(" ")[0]:"",
+      eq="tu "+(o.equipos&&o.equipos.nombre?o.equipos.nombre:equipoLabel().toLowerCase());
+  return "Hola"+(nombre?" "+nombre:"")+", te escribimos de "+(S.taller.nombre||"el taller")+".\n\n"+
+   "Ya pasaron "+hace+" meses desde el último service de "+eq+". Te recomendamos hacerle el mantenimiento para que siga funcionando bien.\n\n"+
+   "¿Querés que coordinemos un turno?";
 }
 
 /* ---------------- clientes / equipos / motores ---------------- */
@@ -851,6 +890,8 @@ function renderConfig(){
    document.getElementById("logoPrev").innerHTML="<img src='"+URL.createObjectURL(f)+"' alt='Logo nuevo' style='max-width:120px;border-radius:10px'>";
   };
   document.getElementById("guardarCfg").onclick=guardarConfig;
+  m.insertAdjacentHTML("beforeend","<div class='card'><h2>🔔 Recordatorios de mantenimiento</h2><label for='recMeses'>Recordar a los clientes cada (meses)</label><input id='recMeses' type='number' min='1' max='36' inputmode='numeric' value='"+mesesRecordatorio()+"'><p class='muted' style='margin:6px 0 0'>Se cuenta desde el último trabajo entregado. Este ajuste queda guardado en este dispositivo.</p></div>");
+  document.getElementById("recMeses").onchange=function(){var v=Math.round(Number(this.value));if(v>=1&&v<=36)lsSet("rec_meses_"+S.taller.id,v);else this.value=mesesRecordatorio()};
   m.insertAdjacentHTML("beforeend",cardInstalarHtml());conectarInstalar();
 }
 async function guardarConfig(){
