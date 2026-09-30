@@ -1223,6 +1223,7 @@ function pintarBotonInstalar(){
   if(b)b.classList.toggle("hide",!promptInstalar||esInstalada());
   var c=document.getElementById("cardInstalar");
   if(c){c.outerHTML=cardInstalarHtml();conectarInstalar()}
+  pintarAvisoInstalar();
 }
 async function instalarApp(){
   if(!promptInstalar)return;
@@ -1234,13 +1235,36 @@ function cardInstalarHtml(){
   var h="<div class='card' id='cardInstalar'><h2>📲 Instalar en el celular</h2>";
   if(esInstalada())h+="<p class='muted'>La app ya está instalada en este dispositivo.</p>";
   else if(promptInstalar)h+="<p class='muted'>Agregá la app a la pantalla de inicio para abrirla como cualquier otra aplicación, a pantalla completa.</p><div class='btns'><button class='btn' id='instalarCfg'>Instalar app</button></div>";
-  else if(esIOS())h+="<p class='muted'>En iPhone: abrí esta página en <b>Safari</b>, tocá el botón <b>Compartir</b> (el cuadrado con la flecha hacia arriba) y elegí <b>Agregar a pantalla de inicio</b>.</p>";
-  else h+="<p class='muted'>En Android: abrí esta página en <b>Chrome</b>, tocá el menú <b>⋮</b> y elegí <b>Instalar aplicación</b> (o <b>Agregar a pantalla de inicio</b>).</p>";
+  else h+="<p class='muted'>"+instruccionesInstalar()+"</p>";
   return h+"</div>";
 }
 function conectarInstalar(){var b=document.getElementById("instalarCfg");if(b)b.onclick=instalarApp}
+// Navegadores dentro de otras apps (Instagram, Facebook, etc.) no permiten instalar.
+function enAppAjena(){return /FBAN|FBAV|Instagram|Line\/|WhatsApp|TikTok|musical_ly|; wv\)/i.test(navigator.userAgent)}
+function esCelular(){return esIOS()||/Android|Mobile/i.test(navigator.userAgent)}
+function instruccionesInstalar(){
+  if(enAppAjena())return "Estás viendo la app dentro de otra aplicación y desde acá no se puede instalar. Tocá el menú <b>⋮</b> o <b>···</b> y elegí <b>Abrir en el navegador</b> ("+(esIOS()?"Safari":"Chrome")+"). Ahí vas a poder instalarla.";
+  if(esIOS())return /CriOS|FxiOS|EdgiOS/.test(navigator.userAgent)?
+    "En iPhone: tocá el botón <b>Compartir</b> (el cuadrado con la flecha ⬆️, arriba a la derecha) y elegí <b>Agregar a pantalla de inicio</b>. Si no aparece, abrí esta página en <b>Safari</b>.":
+    "En iPhone: tocá el botón <b>Compartir</b> (el cuadrado con la flecha ⬆️, abajo en el centro), deslizá y elegí <b>Agregar a pantalla de inicio</b>.";
+  if(/SamsungBrowser/.test(navigator.userAgent))return "En Samsung Internet: tocá el menú <b>☰</b> y elegí <b>Agregar página a</b> → <b>Pantalla de inicio</b>. También podés abrirla en <b>Chrome</b> y tocar <b>⋮</b> → <b>Instalar aplicación</b>.";
+  return "En Android: tocá el menú <b>⋮</b> (arriba a la derecha) y elegí <b>Instalar aplicación</b> o <b>Agregar a pantalla de inicio</b>. Si no aparece, abrí esta página en <b>Chrome</b>.";
+}
+// Aviso abajo en celulares que todavía no tienen la app instalada.
+function pintarAvisoInstalar(){
+  var a=document.getElementById("avisoInstalar");
+  var cerrado=false;try{cerrado=localStorage.getItem("avisoInstalarCerrado")==="1"}catch(e){}
+  if(esInstalada()||!esCelular()||cerrado){if(a)a.remove();return}
+  if(!a){a=document.createElement("div");a.id="avisoInstalar";document.body.appendChild(a)}
+  a.style.cssText="position:fixed;left:10px;right:10px;bottom:10px;z-index:30;background:#151515;border:1px solid var(--line2);border-left:4px solid var(--ac);border-radius:14px;padding:12px 14px;box-shadow:0 10px 30px rgba(0,0,0,.6);font-size:.92rem";
+  a.innerHTML="<div class='lr' style='align-items:flex-start'><b style='font-family:var(--f-head);text-transform:uppercase;letter-spacing:.05em;font-size:1.05rem'>📲 Instalá Torque &amp; Orden</b><button id='avisoCerrar' aria-label='Cerrar' style='background:none;border:0;color:var(--mute);font-size:1.3rem;line-height:1;padding:0 4px'>×</button></div>"+
+   (promptInstalar?"<div class='btns' style='margin-top:8px'><button class='btn' id='avisoInstalarBtn'>Instalar app</button></div>":"<p style='margin:6px 0 0;color:var(--mute)'>"+instruccionesInstalar()+"</p>");
+  document.getElementById("avisoCerrar").onclick=function(){try{localStorage.setItem("avisoInstalarCerrado","1")}catch(e){}a.remove()};
+  var ib=document.getElementById("avisoInstalarBtn");if(ib)ib.onclick=instalarApp;
+}
 
 boot();
+setTimeout(pintarAvisoInstalar,1500);
 </script>
 </body>
 </html>
