@@ -1065,7 +1065,54 @@ function renderConfig(){
    "<p class='muted' style='margin:8px 0 0'>La persona crea su cuenta en esta misma página con ese correo (o entra, si ya tiene una) y queda sumada al taller. Los empleados trabajan con clientes, órdenes y stock, pero no ven la Caja, Mi Plan ni los datos del taller.</p></div>");
   document.getElementById("empInv").onclick=invitarEmpleado;
   cargarEmpleados();
+  m.insertAdjacentHTML("beforeend","<div class='card'><h2>💾 Copia de mis datos</h2><p class='muted' style='margin-top:0'>Tus datos se guardan en la nube, no en el celular. Igual podés descargar una copia cuando quieras y guardarla en tu computadora o en Drive.</p>"+
+   "<div class='btns'><button class='btn' id='expJson'>Copia completa (.json)</button><button class='btn o' id='expCsv'>Órdenes para Excel (.csv)</button></div><div id='expSt' class='status hide'></div></div>");
+  document.getElementById("expJson").onclick=exportarJson;
+  document.getElementById("expCsv").onclick=exportarCsv;
   m.insertAdjacentHTML("beforeend",cardInstalarHtml());conectarInstalar();
+}
+
+/* ---------------- copia de datos del taller ---------------- */
+async function traerTodo(tabla,sel){
+  var out=[],desde=0,paso=1000;
+  for(;;){
+   var r=await sb.from(tabla).select(sel||"*").eq("taller_id",S.taller.id).range(desde,desde+paso-1);
+   if(r.error)throw new Error(tabla+": "+r.error.message);
+   out=out.concat(r.data||[]);
+   if(!r.data||r.data.length<paso)return out;
+   desde+=paso;
+  }
+}
+function descargarArchivo(nombre,contenido,tipo){
+  var url=URL.createObjectURL(new Blob([contenido],{type:tipo})),a=document.createElement("a");
+  a.href=url;a.download=nombre;document.body.appendChild(a);a.click();a.remove();
+  setTimeout(function(){URL.revokeObjectURL(url)},2000);
+}
+function nombreArchivo(ext){return "torque-orden_"+norm(S.taller.nombre).replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")+"_"+new Date().toISOString().slice(0,10)+"."+ext}
+async function exportarJson(){
+  say("expSt","Preparando la copia…");
+  try{
+   var tablas=["clientes","equipos","motores","ordenes","presupuestos","repuestos","movimientos_caja","fotos"],datos={};
+   for(var i=0;i<tablas.length;i++)datos[tablas[i]]=await traerTodo(tablas[i]);
+   var total=tablas.reduce(function(s,t){return s+datos[t].length},0);
+   var copia={app:"Torque & Orden",version:1,generado:new Date().toISOString(),taller:{id:S.taller.id,nombre:S.taller.nombre,rubro:S.taller.rubro},datos:datos};
+   descargarArchivo(nombreArchivo("json"),JSON.stringify(copia,null,1),"application/json");
+   say("expSt","Listo: "+total+" registros ("+datos.clientes.length+" clientes, "+datos.ordenes.length+" órdenes). Las fotos no van en este archivo; siguen guardadas en la nube.");
+  }catch(e){say("expSt","No se pudo generar la copia: "+e.message,true)}
+}
+function celdaCsv(v){v=v==null?"":String(v);return /[";\n\r]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v}
+async function exportarCsv(){
+  say("expSt","Preparando el archivo…");
+  try{
+   var ords=await traerTodo("ordenes","numero,estado,creado,motivo,diagnostico,trabajos,repuestos,observaciones,medidor,clientes(nombre,telefono),equipos(nombre,matricula_patente)");
+   ords.sort(function(a,b){return (a.numero||0)-(b.numero||0)});
+   var filas=[["OT","Fecha","Estado","Cliente","Teléfono",equipoLabel(),patenteLabel(),medidorLabel(),"Motivo","Diagnóstico","Trabajos","Repuestos","Observaciones"]];
+   ords.forEach(function(o){filas.push(["OT "+String(o.numero).padStart(6,"0"),o.creado?new Date(o.creado).toLocaleDateString("es-AR"):"",o.estado,
+    o.clientes?o.clientes.nombre:"",o.clientes?o.clientes.telefono:"",o.equipos?o.equipos.nombre:"",o.equipos?o.equipos.matricula_patente:"",o.medidor,
+    o.motivo,o.diagnostico,o.trabajos,o.repuestos,o.observaciones])});
+   descargarArchivo(nombreArchivo("csv"),"﻿"+filas.map(function(f){return f.map(celdaCsv).join(";")}).join("\r\n"),"text/csv;charset=utf-8");
+   say("expSt","Listo: "+ords.length+" órdenes. Abrilo con Excel o Google Sheets.");
+  }catch(e){say("expSt","No se pudo generar el archivo: "+e.message,true)}
 }
 async function guardarConfig(){
   say("st","Guardando…");
