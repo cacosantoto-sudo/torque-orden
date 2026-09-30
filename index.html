@@ -4,6 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Sistema de taller</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0f2a3d">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Taller">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -49,7 +57,7 @@ a.link{color:var(--ac);word-break:break-all}
 </style>
 </head>
 <body>
-<header><b id="brand">Scotto</b><span id="userbar"></span></header>
+<header><b id="brand">Scotto</b><span><button class="btn o hide" id="instalarApp" style="padding:6px 12px;min-height:32px;margin-right:10px">📲 Instalar app</button><span id="userbar"></span></span></header>
 <nav id="nav" class="hide"></nav>
 <main id="m">Cargando…</main>
 
@@ -62,6 +70,13 @@ var sb=window.supabase.createClient(CFG.SUPABASE_URL,CFG.SUPABASE_ANON_KEY);
 var S={session:null,talleres:[],taller:null,vista:"panel",clientes:[],equipos:[],motores:[],ordenes:[],orden:null};
 var m=document.getElementById("m"),nv=document.getElementById("nav");
 function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
+function norm(s){return String(s==null?"":s).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"")}
+function buscadorHtml(ph,val){return "<input id='buscar' type='search' placeholder='"+ph+"' value=\""+esc(val||"")+"\" autocomplete='off' style='margin-bottom:12px'>"}
+function filtrarLista(txt,extra){
+  var palabras=norm(txt).split(/\s+/).filter(Boolean),vis=0,items=m.querySelectorAll("[data-q]");
+  items.forEach(function(el){var q=el.dataset.q,ok=palabras.every(function(p){return q.indexOf(p)>=0})&&(!extra||extra(el));el.style.display=ok?"":"none";if(ok)vis++});
+  var nr=document.getElementById("sinres");if(nr)nr.classList.toggle("hide",vis>0||!items.length);
+}
 function say(id,msg,err){var s=document.getElementById(id);if(!s)return;s.className="status"+(err?" err":"");s.textContent=msg;s.classList.remove("hide")}
 function medidorLabel(){return S.taller&&S.taller.rubro==="motos"?"Kilómetros":"Horas de motor"}
 function equipoLabel(){return S.taller&&S.taller.rubro==="motos"?"Moto":"Embarcación"}
@@ -80,8 +95,12 @@ async function boot(){
   await cargarTalleres();
 }
 function esPago(){return !!(S.taller&&S.taller.plan==="pago")}
+function esDueno(){return !!(S.taller&&S.taller.rol==="dueno")}
 async function cargarTalleres(){
-  var r=await sb.from("miembros").select("rol, talleres(id,nombre,rubro,logo_url,plan,telefono,direccion,instagram,maps_url)");
+  try{await sb.rpc("aceptar_invitaciones")}catch(e){}
+  var cols="id,nombre,rubro,logo_url,plan,telefono,direccion,instagram,maps_url";
+  var r=await sb.from("miembros").select("rol, talleres("+cols+",recordatorio_meses)");
+  if(r.error)r=await sb.from("miembros").select("rol, talleres("+cols+")");
   if(r.error){renderError(r.error);return}
   S.talleres=(r.data||[]).map(function(x){return Object.assign({rol:x.rol},x.talleres)});
   if(!S.talleres.length){renderCrearTaller();return}
@@ -90,7 +109,7 @@ async function cargarTalleres(){
   document.getElementById("salir").onclick=function(){sb.auth.signOut()};
   document.getElementById("brand").innerHTML=esc(S.taller.nombre)+" <span class='tag' style='background:"+(esPago()?"var(--ok)":"transparent")+";color:"+(esPago()?"#fff":"#cfe0ea")+";border-color:#cfe0ea;font-size:.7rem;vertical-align:middle'>"+(esPago()?"PLAN PAGO":"PLAN GRATIS")+"</span>";
   nv.classList.remove("hide");
-  nv.innerHTML=["panel","clientes","ordenes","stock","caja","plan","config"].map(function(v){return "<button data-v='"+v+"'>"+({panel:"Panel",clientes:"Clientes",ordenes:"Órdenes",stock:"Stock",caja:"Caja",plan:"Mi Plan",config:"Configuración"})[v]+"</button>"}).join("");
+  nv.innerHTML=(esDueno()?["panel","clientes","ordenes","stock","caja","plan","config"]:["panel","clientes","ordenes","stock","config"]).map(function(v){return "<button data-v='"+v+"'>"+({panel:"Panel",clientes:"Clientes",ordenes:"Órdenes",stock:"Stock",caja:"Caja",plan:"Mi Plan",config:"Configuración"})[v]+"</button>"}).join("");
   nv.querySelectorAll("button").forEach(function(b){b.onclick=function(){S.vista=b.dataset.v;S.orden=null;route()}});
   route();
 }
@@ -140,7 +159,10 @@ function renderCrearTaller(){
 
 /* ---------------- router ---------------- */
 function route(){
+  if(!esDueno()&&(S.vista==="caja"||S.vista==="plan"))S.vista="panel";
   if(S.vista==="panel")renderPanel();
+  else if(S.vista==="ficha")renderFicha();
+  else if(S.vista==="patente")renderPatente();
   else if(S.vista==="clientes")renderClientes();
   else if(S.vista==="ordenes")renderOrdenes();
   else if(S.vista==="ordenForm")renderOrdenForm();
@@ -150,7 +172,7 @@ function route(){
   else if(S.vista==="caja")renderCaja();
   else if(S.vista==="plan")renderPlan();
   else if(S.vista==="config")renderConfig();
-  nv.querySelectorAll("button").forEach(function(b){b.setAttribute("aria-current",b.dataset.v===S.vista||((S.vista==="ordenForm"||S.vista==="postForm"||S.vista==="presuForm")&&b.dataset.v==="ordenes"))});
+  nv.querySelectorAll("button").forEach(function(b){b.setAttribute("aria-current",b.dataset.v===S.vista||((S.vista==="ordenForm"||S.vista==="postForm"||S.vista==="presuForm")&&b.dataset.v==="ordenes")||((S.vista==="ficha"||S.vista==="patente")&&b.dataset.v==="clientes"))});
 }
 
 /* ---------------- panel ---------------- */
@@ -161,29 +183,84 @@ async function renderPanel(){
   var h="<div class='card'><h2>Últimas órdenes</h2>";
   h+=r.data.length?r.data.map(function(o){var cls=o.estado==="Listo"||o.estado==="Entregado"?"g":o.estado==="En reparación"?"w":"";
     return "<div class='lr' style='border-top:1px solid var(--line);padding:8px 0'><span>OT "+String(o.numero).padStart(6,"0")+" · "+esc(o.clientes?o.clientes.nombre:"")+"</span><span class='tag "+cls+"'>"+esc(o.estado)+"</span></div>"}).join(""):"<p class='muted'>Todavía no hay órdenes.</p>";
-  h+="</div><div class='btns'><button class='btn' id='ir'>Nueva orden</button></div>";
+  h+="</div><div class='btns'><button class='btn' id='ir'>Nueva orden</button><button class='btn o' id='irPat'>📷 Buscar por patente</button></div>";
+  h+="<div class='card' id='recBox' style='margin-top:16px'><h2>🔔 Mantenimientos para recordar</h2><span class='muted'>Buscando…</span></div>";
   document.getElementById("box").outerHTML=h;
   document.getElementById("ir").onclick=function(){S.orden={estado:"Recibido"};S.vista="ordenForm";route()};
+  document.getElementById("irPat").onclick=function(){S.vista="patente";route()};
+  cargarRecordatorios();
+}
+
+/* ---------------- recordatorios de mantenimiento ---------------- */
+// Se calcula por tiempo: clientes cuyo último trabajo entregado tiene más de N meses
+// y que no tienen otra orden en curso. N y los "ya avisé" se guardan en este dispositivo.
+function lsGet(k,def){try{var v=localStorage.getItem(k);return v==null?def:JSON.parse(v)}catch(e){return def}}
+function lsSet(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
+function mesesRecordatorio(){return Number(S.taller.recordatorio_meses||lsGet("rec_meses_"+S.taller.id,S.taller.rubro==="motos"?6:12))||6}
+function mesesTxt(n){return n+(n===1?" mes":" meses")}
+function mesesEntre(a,b){return (b.getFullYear()-a.getFullYear())*12+(b.getMonth()-a.getMonth())-(b.getDate()<a.getDate()?1:0)}
+async function cargarRecordatorios(){
+  var box=document.getElementById("recBox");if(!box)return;
+  var sel="id,numero,estado,creado,cliente_id,equipos(nombre),clientes(nombre,telefono";
+  var r=await sb.from("ordenes").select(sel+",recordatorio_orden_id)").order("creado",{ascending:false});
+  if(r.error)r=await sb.from("ordenes").select(sel+")").order("creado",{ascending:false});
+  if(!document.getElementById("recBox"))return;
+  if(r.error){box.innerHTML="<h2>🔔 Mantenimientos para recordar</h2><span class='muted'>"+esc(r.error.message)+"</span>";return}
+  var meses=mesesRecordatorio(),hoy=new Date(),avisados=lsGet("rec_avisados_"+S.taller.id,{}),porCliente={};
+  (r.data||[]).forEach(function(o){if(!o.cliente_id||!o.creado)return;var c=porCliente[o.cliente_id]=porCliente[o.cliente_id]||{ultima:null,enCurso:false};
+   if(o.estado==="Entregado"){if(!c.ultima||new Date(o.creado)>new Date(c.ultima.creado))c.ultima=o}else c.enCurso=true});
+  var lista=Object.keys(porCliente).map(function(k){var c=porCliente[k];if(!c.ultima||c.enCurso)return null;
+    var hace=mesesEntre(new Date(c.ultima.creado),hoy);if(hace<meses||avisados[k]===c.ultima.id||(c.ultima.clientes&&c.ultima.clientes.recordatorio_orden_id===c.ultima.id))return null;return {cid:k,o:c.ultima,hace:hace}}).filter(Boolean)
+   .sort(function(a,b){return b.hace-a.hace});
+  var h="<h2>🔔 Mantenimientos para recordar</h2><p class='muted' style='margin-top:0'>Clientes con el último trabajo entregado hace "+mesesTxt(meses)+" o más. Podés cambiar el plazo en Configuración.</p>";
+  h+=lista.length?lista.map(function(x){var o=x.o,tel=telWa(o.clientes&&o.clientes.telefono);
+   return "<div style='border-top:1px solid var(--line);padding:10px 0'><div class='lr'><b>"+esc(o.clientes?o.clientes.nombre:"")+"</b><span class='tag w'>hace "+mesesTxt(x.hace)+"</span></div>"+
+    "<span class='muted'>"+esc(o.equipos?o.equipos.nombre+" · ":"")+"último trabajo: OT "+String(o.numero).padStart(6,"0")+" ("+new Date(o.creado).toLocaleDateString("es-AR")+")</span>"+
+    "<div class='btns' style='margin-top:8px'>"+(tel?"<a class='btn' style='padding:6px 12px;min-height:0;text-decoration:none' target='_blank' rel='noopener' data-rec-wa='"+x.cid+"' href='https://wa.me/"+tel+"?text="+encodeURIComponent(mensajeRecordatorio(o,x.hace))+"'>📲 Recordar por WhatsApp</a>":"<span class='muted'>Sin teléfono cargado.</span>")+
+    "<button class='btn o' style='padding:6px 12px;min-height:0' data-rec-ok='"+x.cid+"' data-oid='"+o.id+"'>Ya avisé</button></div></div>"}).join(""):"<p class='muted'>No hay mantenimientos pendientes de recordar. 👌</p>";
+  box.innerHTML=h;
+  async function marcar(cid,oid){
+   var u=await sb.from("clientes").update({recordatorio_orden_id:oid}).eq("id",cid);
+   if(u.error){var a=lsGet("rec_avisados_"+S.taller.id,{});a[cid]=oid;lsSet("rec_avisados_"+S.taller.id,a)}
+  }
+  box.querySelectorAll("[data-rec-ok]").forEach(function(b){b.onclick=async function(){await marcar(b.dataset.recOk,b.dataset.oid);cargarRecordatorios()}});
+  box.querySelectorAll("[data-rec-wa]").forEach(function(a){a.addEventListener("click",function(){var ok=a.parentNode.querySelector("[data-rec-ok]");marcar(ok.dataset.recOk,ok.dataset.oid);setTimeout(cargarRecordatorios,500)})});
+}
+function mensajeRecordatorio(o,hace){
+  var nombre=o.clientes&&o.clientes.nombre?o.clientes.nombre.split(" ")[0]:"",
+      eq="tu "+(o.equipos&&o.equipos.nombre?o.equipos.nombre:equipoLabel().toLowerCase());
+  return "Hola"+(nombre?" "+nombre:"")+", te escribimos de "+(S.taller.nombre||"el taller")+".\n\n"+
+   "Ya pasaron "+mesesTxt(hace)+" desde el último service de "+eq+". Te recomendamos hacerle el mantenimiento para que siga funcionando bien.\n\n"+
+   "¿Querés que coordinemos un turno?";
 }
 
 /* ---------------- clientes / equipos / motores ---------------- */
 async function renderClientes(){
   m.innerHTML="<h1>Clientes</h1><div id='box'>Cargando…</div>";
-  var r=await sb.from("clientes").select("id,nombre,telefono,equipos(id,nombre,motores(id,marca,modelo,medidor,qr_token))").order("nombre");
+  var r=await sb.from("clientes").select("id,nombre,telefono,equipos(id,nombre,matricula_patente,motores(id,marca,modelo,medidor,qr_token))").order("nombre");
   if(r.error){document.getElementById("box").innerHTML=esc(r.error.message);return}
   S.clientes=r.data||[];
-  var h="<div class='card'><h2>Nuevo cliente</h2><label for='cn'>Nombre</label><input id='cn'><label for='ct'>Teléfono</label><input id='ct'><div class='btns'><button class='btn' id='ca'>Agregar</button></div></div>";
+  var h="<div class='btns' style='margin:12px 0'><button class='btn o' id='cPat'>📷 Buscar por "+patenteLabel().toLowerCase()+"</button></div>"+buscadorHtml("🔍 Buscar por nombre, teléfono, "+equipoLabel().toLowerCase()+", "+patenteLabel().toLowerCase()+" o motor",S.qClientes);
+  h+="<div class='card'><h2>Nuevo cliente</h2><label for='cn'>Nombre</label><input id='cn'><label for='ct'>Teléfono</label><input id='ct'><div class='btns'><button class='btn' id='ca'>Agregar</button></div></div>";
   h+=S.clientes.map(function(c){
    var eq=(c.equipos||[]).map(function(e){var mot=(e.motores||[]).map(function(mo){return "<div class='lr' style='margin-top:6px'><span class='muted'>"+esc([mo.marca,mo.modelo].filter(Boolean).join(" "))+" · "+medidorLabel().toLowerCase()+": "+esc(mo.medidor||0)+"</span><span><button class='btn o' data-qr='"+mo.qr_token+"' style='padding:4px 10px;min-height:0'>Ver QR</button> <button class='btn d' data-del-motor='"+mo.id+"' style='padding:4px 10px;min-height:0'>Eliminar</button></span></div>"}).join("")||"<span class='muted'>Sin motor cargado.</span>";
-    return "<div style='margin-top:8px'><div class='lr'><b>"+esc(e.nombre)+"</b><button class='btn d' data-del-equipo='"+e.id+"' style='padding:4px 10px;min-height:0'>Eliminar "+equipoLabel().toLowerCase()+"</button></div>"+mot+"<button class='btn o' data-motor='"+e.id+"' style='margin-top:6px;padding:6px 12px;min-height:0'>+ Motor</button></div>"}).join("")||"<button class='btn o' data-equipo='"+c.id+"'>+ "+equipoLabel()+"</button>";
-   return "<div class='card'><div class='lr'><b>"+esc(c.nombre)+"</b><button class='btn d' data-del-cliente='"+c.id+"' style='padding:6px 12px;min-height:0'>Eliminar</button></div><span class='muted'>"+esc(c.telefono||"")+"</span>"+eq+"<div style='margin-top:8px'><button class='btn o' data-equipo='"+c.id+"' style='padding:6px 12px;min-height:0'>+ "+equipoLabel()+"</button></div></div>"
+    return "<div style='margin-top:8px'><div class='lr'><button class='link' data-ficha='"+e.id+"' style='background:none;border:0;padding:0;font-weight:700;text-align:left;color:var(--ac)'>"+esc(e.nombre)+(e.matricula_patente?" <span class='tag'>"+esc(e.matricula_patente)+"</span>":"")+" ›</button><button class='btn d' data-del-equipo='"+e.id+"' style='padding:4px 10px;min-height:0'>Eliminar "+equipoLabel().toLowerCase()+"</button></div>"+mot+"<button class='btn o' data-motor='"+e.id+"' style='margin-top:6px;padding:6px 12px;min-height:0'>+ Motor</button> <button class='btn o' data-patente='"+e.id+"' data-actual=\""+esc(e.matricula_patente||"")+"\" style='margin-top:6px;padding:6px 12px;min-height:0'>"+patenteLabel()+"</button></div>"}).join("")||"<button class='btn o' data-equipo='"+c.id+"'>+ "+equipoLabel()+"</button>";
+   var q=norm([c.nombre,c.telefono,String(c.telefono||"").replace(/[^0-9]/g,"")].concat((c.equipos||[]).map(function(e){return [e.nombre,e.matricula_patente,normPatente(e.matricula_patente)].concat((e.motores||[]).map(function(mo){return mo.marca+" "+mo.modelo})).join(" ")})).join(" "));
+   return "<div class='card' data-q=\""+esc(q)+"\"><div class='lr'><b>"+esc(c.nombre)+"</b><button class='btn d' data-del-cliente='"+c.id+"' style='padding:6px 12px;min-height:0'>Eliminar</button></div><span class='muted'>"+esc(c.telefono||"")+"</span>"+eq+"<div style='margin-top:8px'><button class='btn o' data-equipo='"+c.id+"' style='padding:6px 12px;min-height:0'>+ "+equipoLabel()+"</button></div></div>"
   }).join("");
+  h+="<p id='sinres' class='muted hide'>No hay clientes que coincidan con la búsqueda.</p>";
   document.getElementById("box").outerHTML=h;
+  var bc=document.getElementById("buscar");
+  bc.oninput=function(){S.qClientes=bc.value;filtrarLista(bc.value)};
+  filtrarLista(bc.value);
   document.getElementById("ca").onclick=async function(){
    var nom=document.getElementById("cn").value.trim();if(!nom)return;
    await sb.from("clientes").insert({taller_id:S.taller.id,nombre:nom,telefono:document.getElementById("ct").value.trim()});
    renderClientes()};
   m.querySelectorAll("[data-equipo]").forEach(function(b){b.onclick=function(){nuevoEquipo(b.dataset.equipo)}});
+  m.querySelectorAll("[data-ficha]").forEach(function(b){b.onclick=function(){abrirFicha(b.dataset.ficha)}});
+  m.querySelectorAll("[data-patente]").forEach(function(b){b.onclick=async function(){if(await editarPatente(b.dataset.patente,b.dataset.actual))renderClientes()}});
+  document.getElementById("cPat").onclick=function(){S.vista="patente";route()};
   m.querySelectorAll("[data-motor]").forEach(function(b){b.onclick=function(){nuevoMotor(b.dataset.motor)}});
   m.querySelectorAll("[data-qr]").forEach(function(b){b.onclick=function(){verQR(b.dataset.qr)}});
   m.querySelectorAll("[data-del-cliente]").forEach(function(b){b.onclick=function(){eliminarCliente(b.dataset.delCliente)}});
@@ -211,7 +288,8 @@ async function eliminarCliente(id){
 }
 async function nuevoEquipo(clienteId){
   var nom=prompt(equipoLabel()+" (nombre):");if(!nom)return;
-  await sb.from("equipos").insert({taller_id:S.taller.id,cliente_id:clienteId,nombre:nom});
+  var pat=prompt(patenteLabel()+" (opcional):")||"";
+  await sb.from("equipos").insert({taller_id:S.taller.id,cliente_id:clienteId,nombre:nom,matricula_patente:pat.trim().toUpperCase()||null});
   renderClientes();
 }
 async function nuevoMotor(equipoId){
@@ -230,16 +308,23 @@ function verQR(token){
 /* ---------------- órdenes: lista ---------------- */
 async function renderOrdenes(){
   m.innerHTML="<h1>Órdenes de trabajo</h1><div id='box'>Cargando…</div>";
-  var r=await sb.from("ordenes").select("id,numero,estado,clientes(nombre),equipos(nombre)").order("creado",{ascending:false});
+  var r=await sb.from("ordenes").select("id,numero,estado,clientes(nombre),equipos(nombre,matricula_patente)").order("creado",{ascending:false});
   if(r.error){document.getElementById("box").innerHTML=esc(r.error.message);return}
   var h=S.talleres&&S.taller?"":"";
   h+="<div class='btns' style='margin-bottom:12px'><button class='btn' id='nueva'>Nueva orden</button></div>";
+  h+=buscadorHtml("🔍 Buscar por N° de OT, cliente, "+equipoLabel().toLowerCase()+" o "+patenteLabel().toLowerCase(),S.qOrdenes);
+  h+="<select id='festado' style='margin-bottom:12px'><option value=''>Todos los estados</option>"+ESTADOS.map(function(e){return "<option"+(e===S.fEstado?" selected":"")+">"+e+"</option>"}).join("")+"</select>";
   h+=(r.data||[]).map(function(o){var cls=o.estado==="Listo"||o.estado==="Entregado"?"g":o.estado==="En reparación"?"w":"";
    var post=(o.estado==="Listo"||o.estado==="Entregado")?"<button class='btn o' data-post='"+o.id+"' style='padding:6px 12px;min-height:0;margin-top:8px'>📸 Post para Instagram</button>":"";
    var presu="<button class='btn o' data-presu='"+o.id+"' style='padding:6px 12px;min-height:0;margin-top:8px;margin-left:8px'>💰 Presupuesto</button>";
    var del="<button class='btn d' data-del-orden='"+o.id+"' style='padding:6px 12px;min-height:0;margin-top:8px;margin-left:8px'>Eliminar</button>";
-   return "<div class='card'><button class='item' data-id='"+o.id+"'><span><b>OT "+String(o.numero).padStart(6,"0")+"</b> · "+esc(o.clientes?o.clientes.nombre:"Sin cliente")+"<br><span class='muted'>"+esc(o.equipos?o.equipos.nombre:"")+"</span></span><span class='tag "+cls+"'>"+esc(o.estado)+"</span></button>"+post+presu+del+"</div>"}).join("")||"<p class='muted'>Sin órdenes todavía.</p>";
+   var q=norm(["OT "+String(o.numero).padStart(6,"0"),o.numero,o.clientes?o.clientes.nombre:"",o.equipos?o.equipos.nombre:"",o.equipos?o.equipos.matricula_patente:"",o.equipos?normPatente(o.equipos.matricula_patente):""].join(" "));
+   return "<div class='card' data-q=\""+esc(q)+"\" data-estado=\""+esc(o.estado)+"\"><button class='item' data-id='"+o.id+"'><span><b>OT "+String(o.numero).padStart(6,"0")+"</b> · "+esc(o.clientes?o.clientes.nombre:"Sin cliente")+"<br><span class='muted'>"+esc(o.equipos?o.equipos.nombre:"")+"</span></span><span class='tag "+cls+"'>"+esc(o.estado)+"</span></button>"+post+presu+del+"</div>"}).join("")||"<p class='muted'>Sin órdenes todavía.</p>";
+  h+="<p id='sinres' class='muted hide'>No hay órdenes que coincidan con la búsqueda.</p>";
   document.getElementById("box").outerHTML=h;
+  var bo=document.getElementById("buscar"),fe=document.getElementById("festado");
+  function aplicar(){S.qOrdenes=bo.value;S.fEstado=fe.value;filtrarLista(bo.value,fe.value?function(el){return el.dataset.estado===fe.value}:null)}
+  bo.oninput=aplicar;fe.onchange=aplicar;aplicar();
   document.getElementById("nueva").onclick=function(){S.orden={estado:"Recibido"};S.vista="ordenForm";route()};
   m.querySelectorAll("[data-id]").forEach(function(b){b.onclick=async function(){
    var r=await sb.from("ordenes").select("*").eq("id",b.dataset.id).single();
@@ -270,7 +355,9 @@ var rec=null,fotosNuevas=[];
 async function renderOrdenForm(){
   fotosNuevas=[];
   var o=S.orden;
-  var clientesOpt=(S.clientes.length?S.clientes:(await sb.from("clientes").select("id,nombre")).data||[]);
+  if(!("estado_guardado" in o))o.estado_guardado=o.id?o.estado:null;
+  var cr=await sb.from("clientes").select("id,nombre,equipos(id,nombre,matricula_patente,motores(id,marca,modelo,medidor))").order("nombre");
+  var clientesOpt=formClientes=cr.data||[];
   var h="<h1>"+(o.id?"OT "+String(o.numero).padStart(6,"0"):"Nueva orden")+"</h1>";
   h+="<div class='big'><button id='dictar'>🎤 Dictar la orden</button><button id='foto'>📷 Foto de datos</button></div>";
   h+="<input type='file' id='file' accept='image/*' capture='environment' class='hide'>";
@@ -278,11 +365,13 @@ async function renderOrdenForm(){
   h+="<div id='dbox' class='card hide'><h2>Lo que dijiste</h2><textarea id='trans'></textarea><div class='btns'>"+(esPago()?"<button class='btn' id='proc'>Completar campos</button>":"<button class='btn o' id='proc' disabled>🔒 Completar campos (Plan pago)</button>")+"<button class='btn o' id='dstop'>Cancelar</button></div>"+(esPago()?"":"<p class='muted' style='margin-top:8px'>Podés dictar y copiar el texto a mano en los campos de abajo. Completarlos automático con IA es una función del plan pago — mirá la pestaña Mi Plan.</p>")+"</div>";
   h+="<div class='card'>";
   h+="<label for='f_cliente'>Cliente</label><select id='f_cliente'><option value=''>— elegir —</option>"+clientesOpt.map(function(c){return "<option value='"+c.id+"'"+(o.cliente_id===c.id?" selected":"")+">"+esc(c.nombre)+"</option>"}).join("")+"</select>";
-  [["equipo_id",equipoLabel()+" (opcional por ahora)"],].forEach(function(){});
+  h+="<label for='f_equipo'>"+equipoLabel()+"</label><select id='f_equipo'></select>";
+  h+="<div id='motWrap'><label for='f_motor'>Motor</label><select id='f_motor'></select></div>";
   [["motivo","Motivo de ingreso","t"],["diagnostico","Diagnóstico","t"],["trabajos","Trabajos realizados","t"],["repuestos","Repuestos y cantidades","t"],["observaciones","Observaciones","t"]].forEach(function(c){
    h+="<div class='lr'><label for='f_"+c[0]+"'>"+c[1]+"</label><button class='mic' data-mic='"+c[0]+"'>🎤</button></div><textarea id='f_"+c[0]+"'>"+esc(o[c[0]])+"</textarea>"});
   h+="<label for='f_medidor'>"+medidorLabel()+"</label><input id='f_medidor' inputmode='decimal' value='"+esc(o.medidor)+"'>";
   h+="<label for='f_estado'>Estado</label><select id='f_estado'>"+ESTADOS.map(function(e){return "<option"+(e===o.estado?" selected":"")+">"+e+"</option>"}).join("")+"</select></div>";
+  if(o.id)h+="<div class='card'><h2>Firma de retiro</h2><div id='firmaBox'><span class='muted'>Cargando…</span></div></div>";
   h+="<div class='card'><h2>Fotos</h2><div id='ph'>"+(o.id?"<span class='muted'>Cargando fotos…</span>":"<span class='muted'>Se guardan al guardar la orden.</span>")+"</div></div>";
   h+="<div class='btns'><button class='btn' id='save'>Guardar orden</button>"+(o.id?"<button class='btn o' id='presu'>💰 Presupuesto</button>":"")+"<button class='btn o' id='back'>Volver</button>"+(o.id?"<button class='btn d' id='delOrden'>Eliminar orden</button>":"")+"</div>";
   m.innerHTML=h;
@@ -293,8 +382,26 @@ async function renderOrdenForm(){
   document.getElementById("proc").onclick=procesarTexto;
   document.getElementById("dstop").onclick=function(){stopRec();document.getElementById("dbox").classList.add("hide")};
   document.getElementById("save").onclick=guardarOrden;
+  document.getElementById("f_cliente").onchange=function(){o.equipo_id=null;o.motor_id=null;pintarEquiposForm()};
+  document.getElementById("f_equipo").onchange=function(){o.equipo_id=this.value||null;o.motor_id=null;pintarMotoresForm()};
+  document.getElementById("f_motor").onchange=function(){o.motor_id=this.value||null};
+  pintarEquiposForm();
   document.getElementById("back").onclick=function(){stopRec();S.vista="ordenes";route()};
   if(o.id){cargarFotos(o.id);document.getElementById("presu").onclick=function(){abrirPresupuesto(o.id)};document.getElementById("delOrden").onclick=function(){eliminarOrdenYVolver(o.id)}}
+}
+var formClientes=[];
+function equiposDelForm(){var c=formClientes.find(function(x){return x.id===document.getElementById("f_cliente").value});return c?c.equipos||[]:[]}
+function pintarEquiposForm(){
+  var o=S.orden,eqs=equiposDelForm(),sel=document.getElementById("f_equipo");
+  if(eqs.length===1&&!o.equipo_id)o.equipo_id=eqs[0].id;
+  sel.innerHTML="<option value=''>"+(eqs.length?"— elegir —":"— el cliente no tiene "+equipoLabel().toLowerCase()+" cargado —")+"</option>"+eqs.map(function(e){return "<option value='"+e.id+"'"+(o.equipo_id===e.id?" selected":"")+">"+esc(e.nombre)+(e.matricula_patente?" · "+esc(e.matricula_patente):"")+"</option>"}).join("");
+  pintarMotoresForm();
+}
+function pintarMotoresForm(){
+  var o=S.orden,eq=equiposDelForm().find(function(e){return e.id===document.getElementById("f_equipo").value}),mots=eq?eq.motores||[]:[];
+  document.getElementById("motWrap").classList.toggle("hide",!mots.length);
+  if(mots.length===1&&!o.motor_id)o.motor_id=mots[0].id;
+  document.getElementById("f_motor").innerHTML="<option value=''>— sin especificar —</option>"+mots.map(function(mo){return "<option value='"+mo.id+"'"+(o.motor_id===mo.id?" selected":"")+">"+esc([mo.marca,mo.modelo].filter(Boolean).join(" ")||"Motor")+"</option>"}).join("");
 }
 async function eliminarOrdenYVolver(id){
   if(!confirm("¿Eliminar esta orden de trabajo? Se borran también sus fotos y su presupuesto. No se puede deshacer."))return;
@@ -304,7 +411,20 @@ async function eliminarOrdenYVolver(id){
 }
 async function cargarFotos(ordenId){
   var r=await sb.from("fotos").select("id,ruta,resumen").eq("orden_id",ordenId);
-  document.getElementById("ph").innerHTML=(r.data&&r.data.length)?r.data.map(function(f){return "<div style='margin-top:6px'><span class='muted'>"+esc(f.resumen||f.ruta)+"</span></div>"}).join(""):"<span class='muted'>Sin fotos.</span>";
+  var todas=r.data||[],fotos=todas.filter(function(f){return !esFirma(f)}),firma=todas.filter(esFirma)[0];
+  document.getElementById("ph").innerHTML=fotos.length?fotos.map(function(f){return "<div style='margin-top:6px'><span class='muted'>"+esc(f.resumen||f.ruta)+"</span></div>"}).join(""):"<span class='muted'>Sin fotos.</span>";
+  var fb=document.getElementById("firmaBox");if(!fb)return;
+  if(firma){
+   var sig=await sb.storage.from("fotos").createSignedUrl(firma.ruta,600);
+   fb.innerHTML="<p class='muted' style='margin-top:0'>"+esc(firma.resumen||"")+"</p>"+(sig.data?"<img src='"+sig.data.signedUrl+"' alt='Firma del cliente' style='max-width:100%;max-height:160px;background:#fff;border:1px solid var(--line);border-radius:8px'>":"");
+  }else{
+   fb.innerHTML="<p class='muted' style='margin-top:0'>Todavía no firmó el retiro.</p><button class='btn o' id='firmarAhora' style='padding:6px 12px;min-height:0'>✍️ Firmar retiro</button>";
+   document.getElementById("firmarAhora").onclick=async function(){
+    var fo=await sb.from("ordenes").select("id,numero,clientes(nombre)").eq("id",ordenId).single();
+    if(fo.error){alert(fo.error.message);return}
+    renderFirma(fo.data,function(){S.vista="ordenForm";route()});
+   };
+  }
 }
 
 /* ---- voz ---- */
@@ -362,6 +482,8 @@ async function guardarOrden(){
   var o=S.orden,data={
    taller_id:S.taller.id,
    cliente_id:document.getElementById("f_cliente").value||null,
+   equipo_id:document.getElementById("f_equipo").value||null,
+   motor_id:document.getElementById("f_motor").value||null,
    motivo:document.getElementById("f_motivo").value,
    diagnostico:document.getElementById("f_diagnostico").value,
    trabajos:document.getElementById("f_trabajos").value,
@@ -375,12 +497,112 @@ async function guardarOrden(){
   else res=await sb.from("ordenes").insert(data).select().single();
   if(res.error){say("st",res.error.message,true);return}
   ordenId=res.data.id;
+  if(data.motor_id&&data.medidor){
+   var mot=null;formClientes.forEach(function(c){(c.equipos||[]).forEach(function(e){(e.motores||[]).forEach(function(mo){if(mo.id===data.motor_id)mot=mo})})});
+   if(mot&&data.medidor>(Number(mot.medidor)||0))await sb.from("motores").update({medidor:data.medidor}).eq("id",data.motor_id);
+  }
   for(var i=0;i<fotosNuevas.length;i++){
    var path=S.taller.id+"/"+ordenId+"/"+Date.now()+"_"+i+".jpg";
    var up=await sb.storage.from("fotos").upload(path,fotosNuevas[i]);
    if(!up.error)await sb.from("fotos").insert({taller_id:S.taller.id,orden_id:ordenId,ruta:path});
   }
+  var cambio=data.estado!==o.estado_guardado;
+  if(cambio&&data.estado==="Entregado"&&!(await firmaDeOrden(ordenId))){
+   var fo=await sb.from("ordenes").select("id,numero,clientes(nombre)").eq("id",ordenId).single();
+   if(fo.data){renderFirma(fo.data,function(){despuesDeGuardar(ordenId,data,cambio)});return}
+  }
+  despuesDeGuardar(ordenId,data,cambio);
+}
+async function despuesDeGuardar(ordenId,data,cambio){
+  if(data.cliente_id&&cambio){
+   var full=await sb.from("ordenes").select("id,numero,estado,clientes(nombre,telefono),equipos(nombre)").eq("id",ordenId).single();
+   if(full.data&&full.data.clientes&&telWa(full.data.clientes.telefono)){renderAvisoEstado(full.data);return}
+  }
   S.vista="ordenes";route();
+}
+
+/* ---------------- firma del cliente al retirar ---------------- */
+// La firma se guarda como una imagen más de la orden (tabla "fotos"), con "firma_" en la ruta.
+function esFirma(f){return /\/firma_[^/]*$/.test(f.ruta||"")}
+async function firmaDeOrden(ordenId){
+  var r=await sb.from("fotos").select("id,ruta,resumen").eq("orden_id",ordenId);
+  return (r.data||[]).filter(esFirma)[0]||null;
+}
+function renderFirma(o,siguiente){
+  var ot="OT "+String(o.numero).padStart(6,"0");
+  m.innerHTML="<h1>Firma de retiro</h1>"+
+   "<div class='card'><p style='margin-top:0'>Recibo conforme el equipo y los trabajos detallados en la <b>"+ot+"</b>.</p>"+
+   "<label for='firmaNom'>Aclaración (nombre de quien retira)</label><input id='firmaNom' value=\""+esc(o.clientes?o.clientes.nombre:"")+"\">"+
+   "<label>Firma</label><canvas id='firmaPad' style='width:100%;height:200px;background:#fff;border:2px dashed var(--line);border-radius:10px;touch-action:none;display:block;box-sizing:border-box'></canvas>"+
+   "<p class='muted' style='margin:6px 0 0'>Firmá con el dedo dentro del recuadro.</p>"+
+   "<div id='st' class='status hide'></div>"+
+   "<div class='btns'><button class='btn' id='firmaOk'>Guardar firma</button><button class='btn o' id='firmaBorrar'>Borrar</button><button class='btn o' id='firmaSkip'>Sin firma</button></div></div>";
+  var c=document.getElementById("firmaPad"),ctx,dibujo=false,trazando=false,last=null;
+  function prep(){var r=c.getBoundingClientRect(),d=window.devicePixelRatio||1;c.width=Math.round(r.width*d);c.height=Math.round(r.height*d);
+   ctx=c.getContext("2d");ctx.fillStyle="#fff";ctx.fillRect(0,0,c.width,c.height);ctx.scale(d,d);ctx.lineWidth=2.5;ctx.lineCap="round";ctx.lineJoin="round";ctx.strokeStyle="#12202b";dibujo=false}
+  prep();
+  function pos(e){var r=c.getBoundingClientRect();return {x:e.clientX-r.left,y:e.clientY-r.top}}
+  c.onpointerdown=function(e){e.preventDefault();document.getElementById("st").classList.add("hide");c.setPointerCapture(e.pointerId);trazando=true;last=pos(e);ctx.beginPath();ctx.arc(last.x,last.y,1.2,0,7);ctx.fillStyle="#12202b";ctx.fill();dibujo=true};
+  c.onpointermove=function(e){if(!trazando)return;var p=pos(e);ctx.beginPath();ctx.moveTo(last.x,last.y);ctx.lineTo(p.x,p.y);ctx.stroke();last=p;dibujo=true};
+  c.onpointerup=c.onpointercancel=function(){trazando=false};
+  document.getElementById("firmaBorrar").onclick=prep;
+  document.getElementById("firmaSkip").onclick=siguiente;
+  document.getElementById("firmaOk").onclick=async function(){
+   if(!dibujo){say("st","Falta la firma.",true);return}
+   var nom=document.getElementById("firmaNom").value.trim();
+   if(!nom){say("st","Completá la aclaración.",true);return}
+   var btn=this;btn.disabled=true;say("st","Guardando firma…");
+   var blob=await new Promise(function(res){c.toBlob(res,"image/png")});
+   var path=S.taller.id+"/"+o.id+"/firma_"+Date.now()+".png";
+   var up=await sb.storage.from("fotos").upload(path,blob,{contentType:"image/png"});
+   if(up.error){btn.disabled=false;say("st","No se pudo subir la firma: "+up.error.message,true);return}
+   var fecha=new Date().toLocaleString("es-AR",{dateStyle:"short",timeStyle:"short"});
+   var ins=await sb.from("fotos").insert({taller_id:S.taller.id,orden_id:o.id,ruta:path,resumen:"Firma de retiro: "+nom+" ("+fecha+")"});
+   if(ins.error){btn.disabled=false;say("st",ins.error.message,true);return}
+   siguiente();
+  };
+}
+
+/* ---------------- aviso de estado por WhatsApp ---------------- */
+function telWa(t){
+  var d=String(t||"").replace(/[^0-9]/g,"");
+  if(!d)return "";
+  if(d.indexOf("00")===0)d=d.slice(2);
+  if(d.indexOf("54")===0&&d.length>=12){if(d.charAt(2)!=="9")d="549"+d.slice(2);return d}
+  if(d.charAt(0)==="0")d=d.slice(1);
+  if(d.length===12){for(var a=2;a<=4;a++){if(d.substr(a,2)==="15"){d=d.slice(0,a)+d.slice(a+2);break}}}
+  if(d.length===10)return "549"+d;
+  return d;
+}
+function mensajeEstado(o){
+  var t=S.taller||{},nombre=o.clientes&&o.clientes.nombre?o.clientes.nombre.split(" ")[0]:"",
+      eq="tu "+(o.equipos&&o.equipos.nombre?o.equipos.nombre:equipoLabel().toLowerCase()),
+      ot="OT "+String(o.numero).padStart(6,"0");
+  var cuerpo={
+   "Recibido":"Recibimos "+eq+" en el taller. Tu número de orden es "+ot+". Te avisamos cuando tengamos el diagnóstico.",
+   "Diagnóstico":"Ya estamos revisando "+eq+" ("+ot+"). En cuanto tengamos el diagnóstico te contamos.",
+   "Presupuesto":"El presupuesto de "+eq+" ("+ot+") está listo. Te lo pasamos para que lo revises.",
+   "Aprobado":"¡Gracias por aprobar el presupuesto! Arrancamos con el trabajo de "+eq+" ("+ot+").",
+   "En reparación":"Estamos trabajando en "+eq+" ("+ot+"). Te avisamos cuando esté listo.",
+   "Listo":"¡"+eq.charAt(0).toUpperCase()+eq.slice(1)+" ya se puede retirar! ("+ot+")"+(t.direccion?"\nTe esperamos en "+t.direccion+".":""),
+   "Entregado":"Gracias por confiar en nosotros. Cualquier consulta sobre el trabajo de "+eq+" ("+ot+"), escribinos."
+  }[o.estado]||("Tu orden "+ot+" pasó a estado: "+o.estado+".");
+  return "Hola"+(nombre?" "+nombre:"")+", te escribimos de "+(t.nombre||"el taller")+".\n\n"+cuerpo;
+}
+function renderAvisoEstado(o){
+  var tel=telWa(o.clientes.telefono);
+  m.innerHTML="<h1>Orden guardada</h1>"+
+   "<div class='card'><h2>¿Avisar a "+esc(o.clientes.nombre)+" por WhatsApp?</h2>"+
+   "<p class='muted'>La orden pasó a <b>"+esc(o.estado)+"</b>. Podés editar el mensaje antes de enviarlo.</p>"+
+   "<label for='wa_msg'>Mensaje</label><textarea id='wa_msg' rows='6'>"+esc(mensajeEstado(o))+"</textarea>"+
+   "<p class='muted'>Se envía al "+esc(o.clientes.telefono)+"</p>"+
+   "<div class='btns'><a class='btn' id='wa_send' href='#' target='_blank' rel='noopener'>📲 Enviar por WhatsApp</a><button class='btn o' id='wa_skip'>No avisar</button></div></div>";
+  var send=document.getElementById("wa_send");
+  send.onclick=function(){
+   send.href="https://wa.me/"+tel+"?text="+encodeURIComponent(document.getElementById("wa_msg").value);
+   setTimeout(function(){S.vista="ordenes";route()},300);
+  };
+  document.getElementById("wa_skip").onclick=function(){S.vista="ordenes";route()};
 }
 
 /* ---------------- post para Instagram ---------------- */
@@ -401,7 +623,8 @@ async function renderPostForm(){
   postFotos=[];postSel={};
   var r=await sb.from("fotos").select("id,ruta,resumen").eq("orden_id",o.id);
   if(r.error||!r.data||!r.data.length){document.getElementById("fotos").innerHTML="<p class='muted'>Esta orden no tiene fotos cargadas. Podés generar el texto igual.</p>";return}
-  postFotos=r.data;
+  postFotos=r.data.filter(function(f){return !esFirma(f)});
+  if(!postFotos.length){document.getElementById("fotos").innerHTML="<p class='muted'>Esta orden no tiene fotos cargadas. Podés generar el texto igual.</p>";return}
   var h="<div style='display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px'>";
   for(var i=0;i<postFotos.length;i++){
    var f=postFotos[i],sig=await sb.storage.from("fotos").createSignedUrl(f.ruta,600);
@@ -530,7 +753,7 @@ function generarPDF(){
 }
 function enviarWhatsApp(){
   var o=S.orden;
-  var tel=(o.clientes&&o.clientes.telefono)?String(o.clientes.telefono).replace(/[^0-9]/g,""):"";
+  var tel=telWa(o.clientes&&o.clientes.telefono);
   var lineas=S.presu.items.map(function(it){return "• "+it.descripcion+" x"+it.cantidad+" = "+money((Number(it.cantidad)||0)*(Number(it.precio)||0))}).join("\n");
   var msg="Presupuesto "+S.taller.nombre+" - OT "+String(o.numero).padStart(6,"0")+"\n\n"+lineas+"\n\nTotal: "+money(calcTotal());
   var url=tel?("https://wa.me/"+tel+"?text="+encodeURIComponent(msg)):("https://api.whatsapp.com/send?text="+encodeURIComponent(msg));
@@ -692,6 +915,10 @@ function renderPlan(){
 var nuevoLogo=null;
 function renderConfig(){
   var t=S.taller;
+  if(!esDueno()){
+   m.innerHTML="<h1>Configuración</h1><p class='muted'>Entraste como empleado de <b>"+esc(t.nombre)+"</b>. Los datos del taller, la Caja y el plan los maneja el dueño.</p>"+cardInstalarHtml();
+   conectarInstalar();return;
+  }
   nuevoLogo=null;
   m.innerHTML="<h1>Configuración</h1><p class='muted'>Estos datos se muestran en la ficha pública que ve el cliente al escanear el QR.</p>"+
    "<div class='card'><h2>Logo</h2><div id='logoPrev'>"+(t.logo_url?"<img src='"+esc(t.logo_url)+"' alt='Logo actual' style='max-width:120px;border-radius:10px'>":"<span class='muted'>Todavía no cargaste un logo.</span>")+"</div>"+
@@ -711,6 +938,21 @@ function renderConfig(){
    document.getElementById("logoPrev").innerHTML="<img src='"+URL.createObjectURL(f)+"' alt='Logo nuevo' style='max-width:120px;border-radius:10px'>";
   };
   document.getElementById("guardarCfg").onclick=guardarConfig;
+  m.insertAdjacentHTML("beforeend","<div class='card'><h2>🔔 Recordatorios de mantenimiento</h2><label for='recMeses'>Recordar a los clientes cada (meses)</label><input id='recMeses' type='number' min='1' max='36' inputmode='numeric' value='"+mesesRecordatorio()+"'><p class='muted' style='margin:6px 0 0'>Se cuenta desde el último trabajo entregado.</p><div id='recSt' class='status hide'></div></div>");
+  document.getElementById("recMeses").onchange=async function(){
+   var el=this,v=Math.round(Number(el.value));
+   if(!(v>=1&&v<=36)){el.value=mesesRecordatorio();say("recSt","Elegí entre 1 y 36 meses.",true);return}
+   var r=await sb.rpc("configurar_recordatorio",{p_taller_id:S.taller.id,p_meses:v});
+   if(r.error){lsSet("rec_meses_"+S.taller.id,v);say("recSt","Guardado solo en este dispositivo (falta correr el SQL en Supabase).",true);return}
+   S.taller.recordatorio_meses=v;say("recSt","Guardado.");
+  };
+  m.insertAdjacentHTML("beforeend","<div class='card'><h2>👥 Empleados</h2><div id='empList'><span class='muted'>Cargando…</span></div>"+
+   "<label for='empMail'>Invitar por correo</label><input id='empMail' type='email' autocomplete='off' placeholder='empleado@correo.com'>"+
+   "<div class='btns'><button class='btn' id='empInv'>Invitar</button></div><div id='empSt' class='status hide'></div>"+
+   "<p class='muted' style='margin:8px 0 0'>La persona crea su cuenta en esta misma página con ese correo (o entra, si ya tiene una) y queda sumada al taller. Los empleados trabajan con clientes, órdenes y stock, pero no ven la Caja, Mi Plan ni los datos del taller.</p></div>");
+  document.getElementById("empInv").onclick=invitarEmpleado;
+  cargarEmpleados();
+  m.insertAdjacentHTML("beforeend",cardInstalarHtml());conectarInstalar();
 }
 async function guardarConfig(){
   say("st","Guardando…");
@@ -745,6 +987,144 @@ async function subirLogo(tallerId,file){
    return pub.data?pub.data.publicUrl:null;
   }catch(e){return null}
 }
+
+/* ---------------- empleados ---------------- */
+async function cargarEmpleados(){
+  var box=document.getElementById("empList");if(!box)return;
+  var r=await sb.rpc("equipo_del_taller",{p_taller_id:S.taller.id});
+  if(r.error){box.innerHTML="<p class='muted'>Para usar empleados primero hay que correr el SQL nuevo en Supabase.</p>";return}
+  box.innerHTML=(r.data||[]).map(function(x){
+   var tag=x.pendiente?"<span class='tag w'>Invitación pendiente</span>":x.rol==="dueno"?"<span class='tag g'>Dueño</span>":"<span class='tag'>Empleado</span>";
+   var btn=x.pendiente?"<button class='btn d' style='padding:4px 10px;min-height:0' data-emp-cancel=\""+esc(x.email)+"\">Cancelar</button>":
+    x.rol!=="dueno"?"<button class='btn d' style='padding:4px 10px;min-height:0' data-emp-quitar='"+x.usuario_id+"' data-email=\""+esc(x.email)+"\">Quitar</button>":"";
+   return "<div class='lr' style='border-top:1px solid var(--line);padding:8px 0;flex-wrap:wrap'><span style='word-break:break-all'>"+esc(x.email)+"</span><span>"+tag+" "+btn+"</span></div>"}).join("");
+  box.querySelectorAll("[data-emp-cancel]").forEach(function(b){b.onclick=async function(){
+   var r=await sb.rpc("cancelar_invitacion",{p_taller_id:S.taller.id,p_email:b.dataset.empCancel});
+   if(r.error){say("empSt",r.error.message,true);return}cargarEmpleados()}});
+  box.querySelectorAll("[data-emp-quitar]").forEach(function(b){b.onclick=async function(){
+   if(!confirm("¿Quitar a "+b.dataset.email+" del taller? Ya no va a poder entrar a los datos del taller."))return;
+   var r=await sb.rpc("quitar_empleado",{p_taller_id:S.taller.id,p_usuario_id:b.dataset.empQuitar});
+   if(r.error){say("empSt",r.error.message,true);return}cargarEmpleados()}});
+}
+async function invitarEmpleado(){
+  var el=document.getElementById("empMail"),mail=el.value.trim();
+  if(!mail){say("empSt","Escribí el correo del empleado.",true);return}
+  var r=await sb.rpc("invitar_empleado",{p_taller_id:S.taller.id,p_email:mail});
+  if(r.error){say("empSt",r.error.message,true);return}
+  el.value="";say("empSt","Invitación creada. Avisale que entre a esta página y cree su cuenta con "+mail+".");
+  cargarEmpleados();
+}
+
+/* ---------------- patente y ficha del vehículo ---------------- */
+function normPatente(p){return String(p||"").toUpperCase().replace(/[^A-Z0-9]/g,"")}
+function patenteLabel(){return S.taller&&S.taller.rubro==="motos"?"Patente":"Matrícula"}
+function renderPatente(){
+  m.innerHTML="<h1>Buscar por "+patenteLabel().toLowerCase()+"</h1><div class='card'>"+
+   (esPago()?"<button class='btn' id='patFoto' style='width:100%'>📷 Sacar foto a la "+patenteLabel().toLowerCase()+"</button>":
+    "<button class='btn o' disabled style='width:100%'>🔒 Leer la "+patenteLabel().toLowerCase()+" con foto (plan pago)</button>")+
+   "<input type='file' id='patFile' accept='image/*' capture='environment' class='hide'>"+
+   "<label for='patTxt'>"+patenteLabel()+"</label><input id='patTxt' autocapitalize='characters' autocomplete='off' placeholder='AB123CD'>"+
+   "<div id='st' class='status hide'></div>"+
+   "<div class='btns'><button class='btn' id='patBuscar'>Buscar</button><button class='btn o' id='back'>Volver</button></div></div><div id='patRes'></div>";
+  var txt=document.getElementById("patTxt");
+  document.getElementById("patBuscar").onclick=function(){buscarPatente(txt.value)};
+  txt.onkeydown=function(e){if(e.key==="Enter")buscarPatente(txt.value)};
+  document.getElementById("back").onclick=function(){S.vista="panel";route()};
+  var pf=document.getElementById("patFoto");
+  if(pf){pf.onclick=function(){document.getElementById("patFile").click()};
+   document.getElementById("patFile").onchange=function(e){var f=e.target.files[0];e.target.value="";if(f)leerPatenteFoto(f)}}
+  txt.focus();
+}
+async function leerPatenteFoto(file){
+  say("st","Leyendo la "+patenteLabel().toLowerCase()+"…");
+  try{
+   var blob=await shrink(file);
+   var b64=await new Promise(function(res){var fr=new FileReader();fr.onload=function(){res(fr.result.split(",")[1])};fr.readAsDataURL(blob)});
+   var resp=await fetch("/api/leer-foto",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({modo:"patente",rubro:S.taller.rubro,imagen:b64,taller_id:S.taller.id,access_token:S.session.access_token})});
+   var r=await resp.json();if(r.error)throw r.error;
+   if(!r.patente){say("st","No se pudo leer. Probá con otra foto, más cerca y derecha, o escribila.",true);return}
+   document.getElementById("patTxt").value=r.patente;
+   buscarPatente(r.patente);
+  }catch(e){say("st","No se pudo leer la foto. Escribí la "+patenteLabel().toLowerCase()+" a mano.",true)}
+}
+async function buscarPatente(txt){
+  var q=normPatente(txt),res=document.getElementById("patRes");
+  if(!q){say("st","Escribí la "+patenteLabel().toLowerCase()+".",true);return}
+  say("st","Buscando "+q+"…");
+  var r=await sb.from("equipos").select("id,nombre,matricula_patente,clientes(nombre)");
+  if(r.error){say("st",r.error.message,true);return}
+  var todos=(r.data||[]).filter(function(e){return normPatente(e.matricula_patente)});
+  var exactos=todos.filter(function(e){return normPatente(e.matricula_patente)===q});
+  if(exactos.length===1){abrirFicha(exactos[0].id);return}
+  var lista=exactos.length?exactos:todos.filter(function(e){var p=normPatente(e.matricula_patente);return p.indexOf(q)>=0||q.indexOf(p)>=0});
+  document.getElementById("st").classList.add("hide");
+  res.innerHTML=lista.length?"<div class='card'><h2>"+(exactos.length?"Hay más de uno con esa "+patenteLabel().toLowerCase():"Parecidos")+"</h2>"+lista.map(function(e){
+    return "<button class='item' data-ficha='"+e.id+"' style='border-top:1px solid var(--line);padding:10px 0'><span><b>"+esc(e.matricula_patente)+"</b> · "+esc(e.nombre)+"<br><span class='muted'>"+esc(e.clientes?e.clientes.nombre:"")+"</span></span><span>›</span></button>"}).join("")+"</div>":
+   "<div class='card'><h2>No encontramos "+esc(q)+"</h2><p class='muted' style='margin:0'>Cargá la "+patenteLabel().toLowerCase()+" desde <b>Clientes</b> (botón \""+patenteLabel()+"\" debajo de cada "+equipoLabel().toLowerCase()+") para encontrarla la próxima vez.</p></div>";
+  res.querySelectorAll("[data-ficha]").forEach(function(b){b.onclick=function(){abrirFicha(b.dataset.ficha)}});
+}
+function abrirFicha(equipoId){S.fichaId=equipoId;S.vista="ficha";route()}
+async function renderFicha(){
+  m.innerHTML="<h1>Ficha</h1><div id='box'>Cargando…</div>";
+  var r=await sb.from("equipos").select("id,nombre,matricula_patente,notas,cliente_id,clientes(id,nombre,telefono),motores(id,marca,modelo,medidor,qr_token)").eq("id",S.fichaId).single();
+  if(r.error){document.getElementById("box").innerHTML=esc(r.error.message);return}
+  var e=r.data,c=e.clientes||{};
+  var o=await sb.from("ordenes").select("id,numero,estado,creado,motivo,trabajos").eq("equipo_id",e.id).order("creado",{ascending:false});
+  var ords=o.data||[],tel=telWa(c.telefono);
+  var h="<h1>"+esc(e.nombre)+"</h1>"+(e.matricula_patente?"<p style='margin:4px 0 12px'><span class='tag' style='font-size:1rem;letter-spacing:.08em'>"+esc(e.matricula_patente)+"</span></p>":"");
+  h+="<div class='card'><h2>Cliente</h2><b>"+esc(c.nombre||"")+"</b><br><span class='muted'>"+esc(c.telefono||"Sin teléfono")+"</span>"+
+   (tel?"<div class='btns' style='margin-top:10px'><a class='btn o' style='padding:6px 12px;min-height:0;text-decoration:none' target='_blank' rel='noopener' href='https://wa.me/"+tel+"'>📲 WhatsApp</a><a class='btn o' style='padding:6px 12px;min-height:0;text-decoration:none' href='tel:"+esc(String(c.telefono).replace(/[^0-9+]/g,""))+"'>📞 Llamar</a></div>":"")+"</div>";
+  h+="<div class='card'><h2>Motores</h2>"+((e.motores||[]).map(function(mo){return "<div class='lr' style='margin-top:6px'><span>"+esc([mo.marca,mo.modelo].filter(Boolean).join(" ")||"Motor")+"<br><span class='muted'>"+medidorLabel().toLowerCase()+": "+esc(mo.medidor||0)+"</span></span><button class='btn o' data-qr='"+mo.qr_token+"' style='padding:4px 10px;min-height:0'>Ver QR</button></div>"}).join("")||"<span class='muted'>Sin motor cargado.</span>")+"</div>";
+  if(e.notas)h+="<div class='card'><h2>Notas</h2><p style='margin:0;white-space:pre-wrap'>"+esc(e.notas)+"</p></div>";
+  h+="<div class='card'><h2>Historial ("+ords.length+")</h2>"+(ords.length?ords.map(function(x){var cls=x.estado==="Listo"||x.estado==="Entregado"?"g":x.estado==="En reparación"?"w":"";
+    return "<button class='item' data-oid='"+x.id+"' style='border-top:1px solid var(--line);padding:10px 0'><span><b>OT "+String(x.numero).padStart(6,"0")+"</b> · "+new Date(x.creado).toLocaleDateString("es-AR")+"<br><span class='muted'>"+esc((x.trabajos||x.motivo||"").slice(0,90))+"</span></span><span class='tag "+cls+"'>"+esc(x.estado)+"</span></button>"}).join(""):"<span class='muted'>Todavía no hay órdenes para este "+equipoLabel().toLowerCase()+".</span>")+"</div>";
+  h+="<div class='btns'><button class='btn' id='fNueva'>Nueva orden</button><button class='btn o' id='fPat'>✏️ "+patenteLabel()+"</button><button class='btn o' id='back'>Volver</button></div>";
+  m.innerHTML=h;
+  m.querySelectorAll("[data-qr]").forEach(function(b){b.onclick=function(){verQR(b.dataset.qr);window.scrollTo(0,0)}});
+  m.querySelectorAll("[data-oid]").forEach(function(b){b.onclick=async function(){
+   var x=await sb.from("ordenes").select("*").eq("id",b.dataset.oid).single();
+   if(x.error){alert(x.error.message);return}S.orden=x.data;S.vista="ordenForm";route()}});
+  document.getElementById("fNueva").onclick=function(){S.orden={estado:"Recibido",cliente_id:c.id,equipo_id:e.id,motor_id:(e.motores||[]).length===1?e.motores[0].id:null};S.vista="ordenForm";route()};
+  document.getElementById("fPat").onclick=async function(){if(await editarPatente(e.id,e.matricula_patente))renderFicha()};
+  document.getElementById("back").onclick=function(){S.vista="clientes";route()};
+}
+async function editarPatente(equipoId,actual){
+  var p=prompt(patenteLabel()+":",actual||"");if(p==null)return false;
+  p=p.trim().toUpperCase();
+  var r=await sb.from("equipos").update({matricula_patente:p||null}).eq("id",equipoId);
+  if(r.error){alert(r.error.message);return false}
+  return true;
+}
+
+/* ---------------- instalar la app (PWA) ---------------- */
+var promptInstalar=null;
+document.getElementById("instalarApp").onclick=instalarApp;
+function esInstalada(){return window.matchMedia("(display-mode: standalone)").matches||navigator.standalone===true}
+function esIOS(){return /iphone|ipad|ipod/i.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1)}
+if("serviceWorker" in navigator&&location.protocol!=="file:")window.addEventListener("load",function(){navigator.serviceWorker.register("sw.js").catch(function(){})});
+window.addEventListener("beforeinstallprompt",function(e){e.preventDefault();promptInstalar=e;pintarBotonInstalar()});
+window.addEventListener("appinstalled",function(){promptInstalar=null;pintarBotonInstalar()});
+function pintarBotonInstalar(){
+  var b=document.getElementById("instalarApp");
+  if(b)b.classList.toggle("hide",!promptInstalar||esInstalada());
+  var c=document.getElementById("cardInstalar");
+  if(c){c.outerHTML=cardInstalarHtml();conectarInstalar()}
+}
+async function instalarApp(){
+  if(!promptInstalar)return;
+  promptInstalar.prompt();
+  await promptInstalar.userChoice;
+  promptInstalar=null;pintarBotonInstalar();
+}
+function cardInstalarHtml(){
+  var h="<div class='card' id='cardInstalar'><h2>📲 Instalar en el celular</h2>";
+  if(esInstalada())h+="<p class='muted'>La app ya está instalada en este dispositivo.</p>";
+  else if(promptInstalar)h+="<p class='muted'>Agregá la app a la pantalla de inicio para abrirla como cualquier otra aplicación, a pantalla completa.</p><div class='btns'><button class='btn' id='instalarCfg'>Instalar app</button></div>";
+  else if(esIOS())h+="<p class='muted'>En iPhone: abrí esta página en <b>Safari</b>, tocá el botón <b>Compartir</b> (el cuadrado con la flecha hacia arriba) y elegí <b>Agregar a pantalla de inicio</b>.</p>";
+  else h+="<p class='muted'>En Android: abrí esta página en <b>Chrome</b>, tocá el menú <b>⋮</b> y elegí <b>Instalar aplicación</b> (o <b>Agregar a pantalla de inicio</b>).</p>";
+  return h+"</div>";
+}
+function conectarInstalar(){var b=document.getElementById("instalarCfg");if(b)b.onclick=instalarApp}
 
 boot();
 </script>
