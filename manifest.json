@@ -1,6 +1,6 @@
 {
-  "name": "Sistema de taller",
-  "short_name": "Taller",
+  "name": "Toque & Orden",
+  "short_name": "Toque & Orden",
   "description": "Órdenes de trabajo, clientes, presupuestos y stock del taller.",
   "lang": "es-AR",
   "start_url": "./index.html",
