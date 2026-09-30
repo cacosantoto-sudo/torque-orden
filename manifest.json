@@ -1,6 +1,6 @@
 {
-  "name": "Toque & Orden",
-  "short_name": "Toque & Orden",
+  "name": "Torque & Orden",
+  "short_name": "Torque & Orden",
   "description": "Órdenes de trabajo, clientes, presupuestos y stock del taller.",
   "lang": "es-AR",
   "start_url": "./index.html",
