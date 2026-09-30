@@ -53,8 +53,20 @@ export default async function handler(req, res) {
         ]
       }]
     };
+  } else if (modo === "patente") {
+    body = {
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 100,
+      messages: [{
+        role: "user",
+        content: [
+          { type: "image", source: { type: "base64", media_type: "image/jpeg", data: imagen } },
+          { type: "text", text: `Leé la patente o matrícula que se ve en la foto (vehículo o embarcación en Argentina). Devolvé SOLO un objeto JSON {"patente": "..."} con letras en mayúscula y números, sin espacios ni guiones. Si no se lee con certeza, devolvé {"patente": null}.` }
+        ]
+      }]
+    };
   } else {
-    return res.status(400).json({ error: "Falta el modo (texto o foto)" });
+    return res.status(400).json({ error: "Falta el modo (texto, foto o patente)" });
   }
 
   try {
