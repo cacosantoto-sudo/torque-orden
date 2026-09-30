@@ -189,6 +189,7 @@ async function renderPanel(){
 function lsGet(k,def){try{var v=localStorage.getItem(k);return v==null?def:JSON.parse(v)}catch(e){return def}}
 function lsSet(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
 function mesesRecordatorio(){return Number(lsGet("rec_meses_"+S.taller.id,S.taller.rubro==="motos"?6:12))||6}
+function mesesTxt(n){return n+(n===1?" mes":" meses")}
 function mesesEntre(a,b){return (b.getFullYear()-a.getFullYear())*12+(b.getMonth()-a.getMonth())-(b.getDate()<a.getDate()?1:0)}
 async function cargarRecordatorios(){
   var box=document.getElementById("recBox");if(!box)return;
@@ -201,9 +202,9 @@ async function cargarRecordatorios(){
   var lista=Object.keys(porCliente).map(function(k){var c=porCliente[k];if(!c.ultima||c.enCurso)return null;
     var hace=mesesEntre(new Date(c.ultima.creado),hoy);if(hace<meses||avisados[k]===c.ultima.id)return null;return {cid:k,o:c.ultima,hace:hace}}).filter(Boolean)
    .sort(function(a,b){return b.hace-a.hace});
-  var h="<h2>🔔 Mantenimientos para recordar</h2><p class='muted' style='margin-top:0'>Clientes con el último trabajo entregado hace "+meses+" meses o más. Podés cambiar el plazo en Configuración.</p>";
+  var h="<h2>🔔 Mantenimientos para recordar</h2><p class='muted' style='margin-top:0'>Clientes con el último trabajo entregado hace "+mesesTxt(meses)+" o más. Podés cambiar el plazo en Configuración.</p>";
   h+=lista.length?lista.map(function(x){var o=x.o,tel=telWa(o.clientes&&o.clientes.telefono);
-   return "<div style='border-top:1px solid var(--line);padding:10px 0'><div class='lr'><b>"+esc(o.clientes?o.clientes.nombre:"")+"</b><span class='tag w'>hace "+x.hace+" meses</span></div>"+
+   return "<div style='border-top:1px solid var(--line);padding:10px 0'><div class='lr'><b>"+esc(o.clientes?o.clientes.nombre:"")+"</b><span class='tag w'>hace "+mesesTxt(x.hace)+"</span></div>"+
     "<span class='muted'>"+esc(o.equipos?o.equipos.nombre+" · ":"")+"último trabajo: OT "+String(o.numero).padStart(6,"0")+" ("+new Date(o.creado).toLocaleDateString("es-AR")+")</span>"+
     "<div class='btns' style='margin-top:8px'>"+(tel?"<a class='btn' style='padding:6px 12px;min-height:0;text-decoration:none' target='_blank' rel='noopener' data-rec-wa='"+x.cid+"' href='https://wa.me/"+tel+"?text="+encodeURIComponent(mensajeRecordatorio(o,x.hace))+"'>📲 Recordar por WhatsApp</a>":"<span class='muted'>Sin teléfono cargado.</span>")+
     "<button class='btn o' style='padding:6px 12px;min-height:0' data-rec-ok='"+x.cid+"' data-oid='"+o.id+"'>Ya avisé</button></div></div>"}).join(""):"<p class='muted'>No hay mantenimientos pendientes de recordar. 👌</p>";
@@ -216,7 +217,7 @@ function mensajeRecordatorio(o,hace){
   var nombre=o.clientes&&o.clientes.nombre?o.clientes.nombre.split(" ")[0]:"",
       eq="tu "+(o.equipos&&o.equipos.nombre?o.equipos.nombre:equipoLabel().toLowerCase());
   return "Hola"+(nombre?" "+nombre:"")+", te escribimos de "+(S.taller.nombre||"el taller")+".\n\n"+
-   "Ya pasaron "+hace+" meses desde el último service de "+eq+". Te recomendamos hacerle el mantenimiento para que siga funcionando bien.\n\n"+
+   "Ya pasaron "+mesesTxt(hace)+" desde el último service de "+eq+". Te recomendamos hacerle el mantenimiento para que siga funcionando bien.\n\n"+
    "¿Querés que coordinemos un turno?";
 }
 
