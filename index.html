@@ -312,6 +312,7 @@ async function renderOrdenForm(){
    h+="<div class='lr'><label for='f_"+c[0]+"'>"+c[1]+"</label><button class='mic' data-mic='"+c[0]+"'>🎤</button></div><textarea id='f_"+c[0]+"'>"+esc(o[c[0]])+"</textarea>"});
   h+="<label for='f_medidor'>"+medidorLabel()+"</label><input id='f_medidor' inputmode='decimal' value='"+esc(o.medidor)+"'>";
   h+="<label for='f_estado'>Estado</label><select id='f_estado'>"+ESTADOS.map(function(e){return "<option"+(e===o.estado?" selected":"")+">"+e+"</option>"}).join("")+"</select></div>";
+  if(o.id)h+="<div class='card'><h2>Firma de retiro</h2><div id='firmaBox'><span class='muted'>Cargando…</span></div></div>";
   h+="<div class='card'><h2>Fotos</h2><div id='ph'>"+(o.id?"<span class='muted'>Cargando fotos…</span>":"<span class='muted'>Se guardan al guardar la orden.</span>")+"</div></div>";
   h+="<div class='btns'><button class='btn' id='save'>Guardar orden</button>"+(o.id?"<button class='btn o' id='presu'>💰 Presupuesto</button>":"")+"<button class='btn o' id='back'>Volver</button>"+(o.id?"<button class='btn d' id='delOrden'>Eliminar orden</button>":"")+"</div>";
   m.innerHTML=h;
@@ -333,7 +334,20 @@ async function eliminarOrdenYVolver(id){
 }
 async function cargarFotos(ordenId){
   var r=await sb.from("fotos").select("id,ruta,resumen").eq("orden_id",ordenId);
-  document.getElementById("ph").innerHTML=(r.data&&r.data.length)?r.data.map(function(f){return "<div style='margin-top:6px'><span class='muted'>"+esc(f.resumen||f.ruta)+"</span></div>"}).join(""):"<span class='muted'>Sin fotos.</span>";
+  var todas=r.data||[],fotos=todas.filter(function(f){return !esFirma(f)}),firma=todas.filter(esFirma)[0];
+  document.getElementById("ph").innerHTML=fotos.length?fotos.map(function(f){return "<div style='margin-top:6px'><span class='muted'>"+esc(f.resumen||f.ruta)+"</span></div>"}).join(""):"<span class='muted'>Sin fotos.</span>";
+  var fb=document.getElementById("firmaBox");if(!fb)return;
+  if(firma){
+   var sig=await sb.storage.from("fotos").createSignedUrl(firma.ruta,600);
+   fb.innerHTML="<p class='muted' style='margin-top:0'>"+esc(firma.resumen||"")+"</p>"+(sig.data?"<img src='"+sig.data.signedUrl+"' alt='Firma del cliente' style='max-width:100%;max-height:160px;background:#fff;border:1px solid var(--line);border-radius:8px'>":"");
+  }else{
+   fb.innerHTML="<p class='muted' style='margin-top:0'>Todavía no firmó el retiro.</p><button class='btn o' id='firmarAhora' style='padding:6px 12px;min-height:0'>✍️ Firmar retiro</button>";
+   document.getElementById("firmarAhora").onclick=async function(){
+    var fo=await sb.from("ordenes").select("id,numero,clientes(nombre)").eq("id",ordenId).single();
+    if(fo.error){alert(fo.error.message);return}
+    renderFirma(fo.data,function(){S.vista="ordenForm";route()});
+   };
+  }
 }
 
 /* ---- voz ---- */
@@ -409,11 +423,61 @@ async function guardarOrden(){
    var up=await sb.storage.from("fotos").upload(path,fotosNuevas[i]);
    if(!up.error)await sb.from("fotos").insert({taller_id:S.taller.id,orden_id:ordenId,ruta:path});
   }
-  if(data.cliente_id&&data.estado!==o.estado_guardado){
+  var cambio=data.estado!==o.estado_guardado;
+  if(cambio&&data.estado==="Entregado"&&!(await firmaDeOrden(ordenId))){
+   var fo=await sb.from("ordenes").select("id,numero,clientes(nombre)").eq("id",ordenId).single();
+   if(fo.data){renderFirma(fo.data,function(){despuesDeGuardar(ordenId,data,cambio)});return}
+  }
+  despuesDeGuardar(ordenId,data,cambio);
+}
+async function despuesDeGuardar(ordenId,data,cambio){
+  if(data.cliente_id&&cambio){
    var full=await sb.from("ordenes").select("id,numero,estado,clientes(nombre,telefono),equipos(nombre)").eq("id",ordenId).single();
    if(full.data&&full.data.clientes&&telWa(full.data.clientes.telefono)){renderAvisoEstado(full.data);return}
   }
   S.vista="ordenes";route();
+}
+
+/* ---------------- firma del cliente al retirar ---------------- */
+// La firma se guarda como una imagen más de la orden (tabla "fotos"), con "firma_" en la ruta.
+function esFirma(f){return /\/firma_[^/]*$/.test(f.ruta||"")}
+async function firmaDeOrden(ordenId){
+  var r=await sb.from("fotos").select("id,ruta,resumen").eq("orden_id",ordenId);
+  return (r.data||[]).filter(esFirma)[0]||null;
+}
+function renderFirma(o,siguiente){
+  var ot="OT "+String(o.numero).padStart(6,"0");
+  m.innerHTML="<h1>Firma de retiro</h1>"+
+   "<div class='card'><p style='margin-top:0'>Recibo conforme el equipo y los trabajos detallados en la <b>"+ot+"</b>.</p>"+
+   "<label for='firmaNom'>Aclaración (nombre de quien retira)</label><input id='firmaNom' value=\""+esc(o.clientes?o.clientes.nombre:"")+"\">"+
+   "<label>Firma</label><canvas id='firmaPad' style='width:100%;height:200px;background:#fff;border:2px dashed var(--line);border-radius:10px;touch-action:none;display:block;box-sizing:border-box'></canvas>"+
+   "<p class='muted' style='margin:6px 0 0'>Firmá con el dedo dentro del recuadro.</p>"+
+   "<div id='st' class='status hide'></div>"+
+   "<div class='btns'><button class='btn' id='firmaOk'>Guardar firma</button><button class='btn o' id='firmaBorrar'>Borrar</button><button class='btn o' id='firmaSkip'>Sin firma</button></div></div>";
+  var c=document.getElementById("firmaPad"),ctx,dibujo=false,trazando=false,last=null;
+  function prep(){var r=c.getBoundingClientRect(),d=window.devicePixelRatio||1;c.width=Math.round(r.width*d);c.height=Math.round(r.height*d);
+   ctx=c.getContext("2d");ctx.fillStyle="#fff";ctx.fillRect(0,0,c.width,c.height);ctx.scale(d,d);ctx.lineWidth=2.5;ctx.lineCap="round";ctx.lineJoin="round";ctx.strokeStyle="#12202b";dibujo=false}
+  prep();
+  function pos(e){var r=c.getBoundingClientRect();return {x:e.clientX-r.left,y:e.clientY-r.top}}
+  c.onpointerdown=function(e){e.preventDefault();document.getElementById("st").classList.add("hide");c.setPointerCapture(e.pointerId);trazando=true;last=pos(e);ctx.beginPath();ctx.arc(last.x,last.y,1.2,0,7);ctx.fillStyle="#12202b";ctx.fill();dibujo=true};
+  c.onpointermove=function(e){if(!trazando)return;var p=pos(e);ctx.beginPath();ctx.moveTo(last.x,last.y);ctx.lineTo(p.x,p.y);ctx.stroke();last=p;dibujo=true};
+  c.onpointerup=c.onpointercancel=function(){trazando=false};
+  document.getElementById("firmaBorrar").onclick=prep;
+  document.getElementById("firmaSkip").onclick=siguiente;
+  document.getElementById("firmaOk").onclick=async function(){
+   if(!dibujo){say("st","Falta la firma.",true);return}
+   var nom=document.getElementById("firmaNom").value.trim();
+   if(!nom){say("st","Completá la aclaración.",true);return}
+   var btn=this;btn.disabled=true;say("st","Guardando firma…");
+   var blob=await new Promise(function(res){c.toBlob(res,"image/png")});
+   var path=S.taller.id+"/"+o.id+"/firma_"+Date.now()+".png";
+   var up=await sb.storage.from("fotos").upload(path,blob,{contentType:"image/png"});
+   if(up.error){btn.disabled=false;say("st","No se pudo subir la firma: "+up.error.message,true);return}
+   var fecha=new Date().toLocaleString("es-AR",{dateStyle:"short",timeStyle:"short"});
+   var ins=await sb.from("fotos").insert({taller_id:S.taller.id,orden_id:o.id,ruta:path,resumen:"Firma de retiro: "+nom+" ("+fecha+")"});
+   if(ins.error){btn.disabled=false;say("st",ins.error.message,true);return}
+   siguiente();
+  };
 }
 
 /* ---------------- aviso de estado por WhatsApp ---------------- */
@@ -476,7 +540,8 @@ async function renderPostForm(){
   postFotos=[];postSel={};
   var r=await sb.from("fotos").select("id,ruta,resumen").eq("orden_id",o.id);
   if(r.error||!r.data||!r.data.length){document.getElementById("fotos").innerHTML="<p class='muted'>Esta orden no tiene fotos cargadas. Podés generar el texto igual.</p>";return}
-  postFotos=r.data;
+  postFotos=r.data.filter(function(f){return !esFirma(f)});
+  if(!postFotos.length){document.getElementById("fotos").innerHTML="<p class='muted'>Esta orden no tiene fotos cargadas. Podés generar el texto igual.</p>";return}
   var h="<div style='display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px'>";
   for(var i=0;i<postFotos.length;i++){
    var f=postFotos[i],sig=await sb.storage.from("fotos").createSignedUrl(f.ruta,600);
