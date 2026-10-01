@@ -1,0 +1,75 @@
+# Copia de seguridad diaria de la base de datos de Supabase.
+# Corre todas las noches (03:00 hora argentina) y también a mano desde
+# GitHub > Actions > "Backup diario" > Run workflow.
+#
+# Necesita dos "secrets" en GitHub > Settings > Secrets and variables > Actions:
+#   SUPABASE_DB_URL    Cadena de conexión de Supabase (Connect > Session pooler)
+#   BACKUP_PASSPHRASE  Una contraseña larga para cifrar las copias (guardala aparte)
+#
+# La copia queda cifrada (AES-256) como "artifact" del workflow durante 90 días.
+# Cómo restaurar: ver docs/BACKUP.md
+name: Backup diario
+
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Revisar que estén los secrets
+        env:
+          DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          PASS: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          if [ -z "$DB_URL" ] || [ -z "$PASS" ]; then
+            echo "::error::Faltan los secrets SUPABASE_DB_URL y/o BACKUP_PASSPHRASE (ver docs/BACKUP.md)"
+            exit 1
+          fi
+
+      - name: Instalar cliente de PostgreSQL 17
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-common
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y -qq postgresql-client-17
+
+      - name: Copiar la base (esquemas public, auth y storage)
+        env:
+          DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          FECHA=$(date -u +%Y-%m-%d)
+          echo "FECHA=$FECHA" >> "$GITHUB_ENV"
+          /usr/lib/postgresql/17/bin/pg_dump "$DB_URL" \
+            --format=custom --no-owner --no-privileges \
+            --schema=public --schema=auth --schema=storage \
+            --file="torque-orden-$FECHA.dump"
+          ls -lh "torque-orden-$FECHA.dump"
+          # Control: la copia tiene que poder leerse y traer las tablas principales
+          /usr/lib/postgresql/17/bin/pg_restore --list "torque-orden-$FECHA.dump" > lista.txt
+          for t in clientes ordenes equipos motores miembros talleres; do
+            grep -q "TABLE DATA public $t " lista.txt || { echo "::error::Falta la tabla $t en la copia"; exit 1; }
+          done
+
+      - name: Cifrar la copia
+        env:
+          PASS: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          gpg --batch --yes --pinentry-mode loopback --passphrase "$PASS" \
+            --symmetric --cipher-algo AES256 \
+            -o "torque-orden-$FECHA.dump.gpg" "torque-orden-$FECHA.dump"
+          shred -u "torque-orden-$FECHA.dump" lista.txt
+
+      - name: Guardar la copia cifrada (90 días)
+        uses: actions/upload-artifact@v4
+        with:
+          name: backup-${{ env.FECHA }}
+          path: torque-orden-${{ env.FECHA }}.dump.gpg
+          retention-days: 90
+          if-no-files-found: error
