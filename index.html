@@ -441,7 +441,7 @@ function eliminarOrden(id){
   borrarConDeshacer("Orden eliminada",tarjetaDe("[data-del-orden='"+id+"']"),function(){return sb.from("ordenes").delete().eq("id",id)},renderOrdenes);
 }
 async function abrirPresupuesto(ordenId){
-  var r=await sb.from("ordenes").select("*, clientes(nombre,telefono), equipos(nombre), motores(marca,modelo)").eq("id",ordenId).single();
+  var r=await sb.from("ordenes").select("*, clientes(nombre,telefono), equipos(nombre,matricula_patente), motores(marca,modelo)").eq("id",ordenId).single();
   if(r.error){alert(r.error.message);return}
   S.orden=r.data;S.vista="presuForm";route();
 }
@@ -786,8 +786,9 @@ function pintarPresu(){
   h+="<div id='st' class='status hide'></div>";
   h+="<div class='btns'>"+
     "<button class='btn' id='guardar'>Guardar presupuesto</button>"+
-    "<button class='btn o' id='pdf'>Generar PDF</button>"+
-    "<button class='btn o' id='wa'>Enviar por WhatsApp</button>"+
+    "<button class='btn o' id='pdf'>"+ic("download")+" PDF para el cliente</button>"+
+    "<button class='btn o' id='wa'>"+ic("message")+" Enviar por WhatsApp</button>"+
+    "<button class='btn o' id='copiarMsg'>Copiar mensaje</button>"+
     (S.presu.aprobado?"<span class='tag g' style='align-self:center'>Aprobado</span>":"<button class='btn' id='aprobar' style='background:var(--ok)'>Aprobar presupuesto</button>")+
     "<button class='btn o' id='back'>Volver</button>"+
     (S.presu.id?"<button class='btn d' id='delPresu'>Eliminar presupuesto</button>":"")+
@@ -805,6 +806,7 @@ function pintarPresu(){
   document.getElementById("guardar").onclick=guardarPresupuesto;
   document.getElementById("pdf").onclick=generarPDF;
   document.getElementById("wa").onclick=enviarWhatsApp;
+  document.getElementById("copiarMsg").onclick=copiarMensaje;
   document.getElementById("back").onclick=function(){S.vista="ordenes";route()};
   var apBtn=document.getElementById("aprobar");if(apBtn)apBtn.onclick=aprobarPresupuesto;
   var delBtn=document.getElementById("delPresu");if(delBtn)delBtn.onclick=eliminarPresupuesto;
@@ -824,35 +826,117 @@ async function guardarPresupuesto(){
   if(r.error){say("st",r.error.message,true);return null}
   S.presu=r.data;say("st","Presupuesto guardado.");return r.data;
 }
-function generarPDF(){
-  if(!window.jspdf){say("st","No se pudo cargar el generador de PDF.",true);return}
-  var o=S.orden;
-  var doc=new window.jspdf.jsPDF();
-  doc.setFontSize(16);doc.text(String(S.taller.nombre),14,18);
-  doc.setFontSize(11);doc.text("Presupuesto - OT "+String(o.numero).padStart(6,"0"),14,26);
-  doc.text("Cliente: "+(o.clientes?o.clientes.nombre:"-"),14,34);
-  doc.text(equipoLabel()+": "+(o.equipos?o.equipos.nombre:"-"),14,40);
-  var y=52;
-  doc.setFontSize(10);
-  doc.text("Descripción",14,y);doc.text("Cant.",120,y);doc.text("P. Unit.",145,y);doc.text("Subtotal",175,y);
-  y+=4;doc.line(14,y,196,y);y+=8;
-  S.presu.items.forEach(function(it){
-    doc.text(String(it.descripcion||"").slice(0,45),14,y);
-    doc.text(String(it.cantidad||0),120,y);
-    doc.text(money(it.precio),145,y);
-    doc.text(money((Number(it.cantidad)||0)*(Number(it.precio)||0)),175,y);
-    y+=7;
-    if(y>270){doc.addPage();y=20}
+// Montos sin ",00" cuando son enteros
+function plata(n){n=Number(n)||0;return "$"+n.toLocaleString("es-AR",{minimumFractionDigits:n%1?2:0,maximumFractionDigits:2})}
+var VALIDEZ_PRESU=15;
+function imgADataUrl(url){return new Promise(function(res){if(!url){res(null);return}
+  var im=new Image();im.crossOrigin="anonymous";
+  im.onload=function(){try{var c=document.createElement("canvas"),k=Math.min(1,400/Math.max(im.width,im.height));c.width=im.width*k;c.height=im.height*k;
+   c.getContext("2d").drawImage(im,0,0,c.width,c.height);res({src:c.toDataURL("image/png"),w:c.width,h:c.height})}catch(e){res(null)}};
+  im.onerror=function(){res(null)};im.src=url;setTimeout(function(){res(null)},4000)})}
+async function armarPDF(){
+  var o=S.orden,t=S.taller,J=window.jspdf.jsPDF,doc=new J({unit:"mm",format:"a4"});
+  var ot="OT "+String(o.numero).padStart(6,"0"),hoy=new Date(),vence=new Date(hoy.getTime()+VALIDEZ_PRESU*864e5);
+  var NEGRO=[17,17,17],NARANJA=[255,106,19],GRIS=[110,110,105],CLARO=[244,244,242],LINEA=[225,225,220];
+  // encabezado negro
+  doc.setFillColor.apply(doc,NEGRO);doc.rect(0,0,210,40,"F");
+  doc.setFillColor.apply(doc,NARANJA);doc.rect(0,40,210,1.6,"F");
+  var x0=14,logo=await imgADataUrl(t.logo_url);
+  if(logo){var tw=26,k=Math.min(20/logo.w,20/logo.h),lw=logo.w*k,lh=logo.h*k;doc.setFillColor(255,255,255);doc.roundedRect(14,7,tw,tw,3,3,"F");doc.addImage(logo.src,"PNG",14+(tw-lw)/2,7+(tw-lh)/2,lw,lh);x0=14+tw+7}
+  doc.setTextColor(255,255,255);doc.setFont("helvetica","bold");doc.setFontSize(18);doc.text(String(t.nombre||"").toUpperCase(),x0,19);
+  doc.setFont("helvetica","normal");doc.setFontSize(9);doc.setTextColor(200,200,195);
+  var anchoC=196-x0-46,yC=26.5;
+  [t.direccion||"",[t.telefono?"Tel. "+t.telefono:"",t.instagram?"@"+String(t.instagram).replace(/^@/,""):""].filter(Boolean).join("   ·   ")].filter(Boolean).forEach(function(l){
+   doc.text(doc.splitTextToSize(l,anchoC)[0],x0,yC);yC+=5});
+  doc.setFont("helvetica","bold");doc.setFontSize(9);doc.setTextColor.apply(doc,NARANJA);doc.text("PRESUPUESTO",196,15,{align:"right"});
+  doc.setTextColor(255,255,255);doc.setFontSize(15);doc.text(ot,196,23,{align:"right"});
+  doc.setFont("helvetica","normal");doc.setFontSize(8.5);doc.setTextColor(200,200,195);
+  doc.text("Fecha: "+hoy.toLocaleDateString("es-AR"),196,30,{align:"right"});
+  // cajas cliente / vehículo
+  var y=50;
+  function caja(xx,titulo,lineas){doc.setFillColor.apply(doc,CLARO);doc.roundedRect(xx,y,88,26,2,2,"F");
+   doc.setFont("helvetica","bold");doc.setFontSize(7.5);doc.setTextColor.apply(doc,GRIS);doc.text(titulo,xx+5,y+6.5);
+   doc.setTextColor.apply(doc,NEGRO);doc.setFontSize(11);doc.text(String(lineas[0]||"-"),xx+5,y+13.5);
+   doc.setFont("helvetica","normal");doc.setFontSize(9);doc.setTextColor.apply(doc,GRIS);if(lineas[1])doc.text(String(lineas[1]),xx+5,y+20)}
+  caja(14,"CLIENTE",[o.clientes?o.clientes.nombre:"-",o.clientes&&o.clientes.telefono?"Tel. "+o.clientes.telefono:""]);
+  var veh=o.equipos?o.equipos.nombre:(o.motores?[o.motores.marca,o.motores.modelo].filter(Boolean).join(" "):"-");
+  var det=[o.equipos&&o.equipos.matricula_patente?patenteLabel()+" "+o.equipos.matricula_patente:"",o.medidor?medidorLabel()+": "+Number(o.medidor).toLocaleString("es-AR"):""].filter(Boolean).join("  ·  ");
+  caja(108,equipoLabel().toUpperCase(),[veh,det]);
+  // trabajo a realizar
+  y=86;
+  var trabajo=String(o.diagnostico||o.motivo||"").trim();
+  if(trabajo){
+   doc.setFont("helvetica","normal");doc.setFontSize(10);var tl=doc.splitTextToSize(trabajo,176).slice(0,6);
+   doc.setFont("helvetica","bold");doc.setFontSize(7.5);doc.setTextColor.apply(doc,GRIS);doc.text(o.diagnostico?"DIAGNÓSTICO":"MOTIVO DE INGRESO",14,y);
+   doc.setFillColor.apply(doc,NARANJA);doc.rect(14,y+2.5,1.2,tl.length*5+1,"F");
+   doc.setFont("helvetica","normal");doc.setFontSize(10);doc.setTextColor.apply(doc,NEGRO);doc.text(tl,19,y+6.5);
+   y+=tl.length*5+12;
+  }
+  // tabla
+  y+=6;
+  doc.setFillColor.apply(doc,NEGRO);doc.rect(14,y-6,182,9,"F");
+  doc.setFont("helvetica","bold");doc.setFontSize(8.5);doc.setTextColor(255,255,255);
+  doc.text("DESCRIPCIÓN",18,y);doc.text("CANT.",122,y,{align:"right"});doc.text("P. UNITARIO",158,y,{align:"right"});doc.text("SUBTOTAL",192,y,{align:"right"});
+  y+=9;doc.setFont("helvetica","normal");doc.setFontSize(10);
+  S.presu.items.filter(function(it){return String(it.descripcion||"").trim()||Number(it.precio)}).forEach(function(it,i){
+   var lineas=doc.splitTextToSize(String(it.descripcion||""),95),alto=Math.max(9,lineas.length*5+4);
+   if(y+alto>255){doc.addPage();y=20}
+   if(i%2===1){doc.setFillColor.apply(doc,CLARO);doc.rect(14,y-6,182,alto,"F")}
+   doc.setTextColor.apply(doc,NEGRO);doc.text(lineas,18,y);
+   doc.setTextColor.apply(doc,GRIS);doc.text(String(it.cantidad||0),122,y,{align:"right"});doc.text(plata(it.precio),158,y,{align:"right"});
+   doc.setTextColor.apply(doc,NEGRO);doc.text(plata((Number(it.cantidad)||0)*(Number(it.precio)||0)),192,y,{align:"right"});
+   y+=alto;
   });
-  y+=4;doc.line(14,y,196,y);y+=10;
-  doc.setFontSize(13);doc.text("Total: "+money(calcTotal()),140,y);
-  doc.save("presupuesto_OT"+String(o.numero).padStart(6,"0")+".pdf");
+  doc.setDrawColor.apply(doc,LINEA);doc.line(14,y-3,196,y-3);
+  // total
+  y+=4;if(y>255){doc.addPage();y=20}
+  doc.setFillColor.apply(doc,NARANJA);doc.roundedRect(116,y,80,15,2,2,"F");
+  doc.setTextColor.apply(doc,NEGRO);doc.setFont("helvetica","bold");doc.setFontSize(9);doc.text("TOTAL",121,y+9.5);
+  doc.setFontSize(15);doc.text(plata(calcTotal()),192,y+10,{align:"right"});
+  doc.setFont("helvetica","normal");doc.setFontSize(9);doc.setTextColor.apply(doc,GRIS);
+  doc.text("Válido por "+VALIDEZ_PRESU+" días (hasta el "+vence.toLocaleDateString("es-AR")+").",14,y+6);
+  doc.text("Los precios de repuestos pueden variar según disponibilidad.",14,y+11);
+  // conformidad y pie
+  var yf=Math.max(y+40,250);if(yf>270){doc.addPage();yf=250}
+  doc.setDrawColor.apply(doc,GRIS);doc.line(14,yf,84,yf);doc.setFontSize(8.5);doc.text("Conformidad del cliente",14,yf+5);
+  doc.setFontSize(7.5);doc.setTextColor(160,160,155);
+  doc.text("Documento no válido como factura.",196,yf+5,{align:"right"});
+  doc.text("Hecho con Torque & Orden",196,yf+10,{align:"right"});
+  return {doc:doc,nombre:"Presupuesto_"+ot.replace(" ","")+"_"+String(t.nombre||"taller").replace(/[^A-Za-z0-9]+/g,"-")+".pdf"};
+}
+async function generarPDF(){
+  if(!window.jspdf){say("st","No se pudo cargar el generador de PDF. Revisá la conexión.",true);return}
+  say("st","Armando el PDF…");
+  var r=await armarPDF(),blob=r.doc.output("blob"),file=null;
+  try{file=new File([blob],r.nombre,{type:"application/pdf"})}catch(e){}
+  if(file&&navigator.canShare&&navigator.canShare({files:[file]})){
+   try{await navigator.share({files:[file],title:r.nombre,text:"Presupuesto "+S.taller.nombre});say("st","Listo.");return}
+   catch(e){if(e&&e.name==="AbortError"){document.getElementById("st").classList.add("hide");return}}
+  }
+  r.doc.save(r.nombre);
+  say("st","PDF descargado. Adjuntalo en el chat de WhatsApp del cliente.");
+}
+function mensajePresupuesto(){
+  var o=S.orden,t=S.taller,ot="OT "+String(o.numero).padStart(6,"0");
+  var veh=o.equipos?o.equipos.nombre+(o.equipos.matricula_patente?" ("+o.equipos.matricula_patente+")":""):"";
+  var nombre=o.clientes&&o.clientes.nombre?o.clientes.nombre.split(" ")[0]:"";
+  var items=S.presu.items.filter(function(it){return String(it.descripcion||"").trim()}).map(function(it){
+   var c=Number(it.cantidad)||0;return "• "+it.descripcion+"\n   "+(c!==1?c+" × "+plata(it.precio)+" = ":"")+plata(c*(Number(it.precio)||0))}).join("\n");
+  return "Hola"+(nombre?" "+nombre:"")+", te paso el presupuesto de *"+(t.nombre||"el taller")+"*\n"+
+   "_"+ot+(veh?" · "+veh:"")+"_\n\n"+items+"\n\n"+
+   "*TOTAL: "+plata(calcTotal())+"*\n\n"+
+   "Válido por "+VALIDEZ_PRESU+" días. Si estás de acuerdo, respondé *OK* y arrancamos."+
+   (t.direccion||t.telefono?"\n\n"+[t.direccion,t.telefono?"Tel. "+t.telefono:""].filter(Boolean).join(" · "):"");
+}
+async function copiarMensaje(){
+  var msg=mensajePresupuesto(),ok=false;
+  try{await navigator.clipboard.writeText(msg);ok=true}catch(e){
+   var ta=document.createElement("textarea");ta.value=msg;ta.style.cssText="position:fixed;opacity:0";document.body.appendChild(ta);ta.select();
+   try{ok=document.execCommand("copy")}catch(e2){}ta.remove()}
+  say("st",ok?"Mensaje copiado. Abrí el chat del cliente en WhatsApp y pegalo.":"No se pudo copiar automáticamente. Usá Enviar por WhatsApp.",!ok);
 }
 function enviarWhatsApp(){
-  var o=S.orden;
-  var tel=telWa(o.clientes&&o.clientes.telefono);
-  var lineas=S.presu.items.map(function(it){return "• "+it.descripcion+" x"+it.cantidad+" = "+money((Number(it.cantidad)||0)*(Number(it.precio)||0))}).join("\n");
-  var msg="Presupuesto "+S.taller.nombre+" - OT "+String(o.numero).padStart(6,"0")+"\n\n"+lineas+"\n\nTotal: "+money(calcTotal());
+  var o=S.orden,tel=telWa(o.clientes&&o.clientes.telefono),msg=mensajePresupuesto();
   var url=tel?("https://wa.me/"+tel+"?text="+encodeURIComponent(msg)):("https://api.whatsapp.com/send?text="+encodeURIComponent(msg));
   window.open(url,"_blank");
 }
