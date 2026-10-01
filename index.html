@@ -181,7 +181,7 @@ function esDueno(){return !!(S.taller&&S.taller.rol==="dueno")}
 async function cargarTalleres(){
   try{await sb.rpc("aceptar_invitaciones")}catch(e){}
   var cols="id,nombre,rubro,logo_url,plan,telefono,direccion,instagram,maps_url";
-  var r=await sb.from("miembros").select("rol, talleres("+cols+",recordatorio_meses)");
+  var r=await sb.from("miembros").select("rol, talleres(*)");
   if(r.error)r=await sb.from("miembros").select("rol, talleres("+cols+")");
   if(r.error){renderError(r.error);return}
   S.talleres=(r.data||[]).map(function(x){return Object.assign({rol:x.rol},x.talleres)});
@@ -789,6 +789,7 @@ function pintarPresu(){
     "<button class='btn o' id='pdf'>"+ic("download")+" PDF para el cliente</button>"+
     "<button class='btn o' id='wa'>"+ic("message")+" Enviar por WhatsApp</button>"+
     "<button class='btn o' id='copiarMsg'>Copiar mensaje</button>"+
+    (S.taller.alias_pago?"<button class='btn o' id='copiarAlias'>Copiar alias</button>":"")+
     (S.presu.aprobado?"<span class='tag g' style='align-self:center'>Aprobado</span>":"<button class='btn' id='aprobar' style='background:var(--ok)'>Aprobar presupuesto</button>")+
     "<button class='btn o' id='back'>Volver</button>"+
     (S.presu.id?"<button class='btn d' id='delPresu'>Eliminar presupuesto</button>":"")+
@@ -807,6 +808,7 @@ function pintarPresu(){
   document.getElementById("pdf").onclick=generarPDF;
   document.getElementById("wa").onclick=enviarWhatsApp;
   document.getElementById("copiarMsg").onclick=copiarMensaje;
+  var ca=document.getElementById("copiarAlias");if(ca)ca.onclick=function(){copiarTexto(S.taller.alias_pago,"Alias copiado: "+S.taller.alias_pago)};
   document.getElementById("back").onclick=function(){S.vista="ordenes";route()};
   var apBtn=document.getElementById("aprobar");if(apBtn)apBtn.onclick=aprobarPresupuesto;
   var delBtn=document.getElementById("delPresu");if(delBtn)delBtn.onclick=eliminarPresupuesto;
@@ -829,6 +831,8 @@ async function guardarPresupuesto(){
 // Montos sin ",00" cuando son enteros
 function plata(n){n=Number(n)||0;return "$"+n.toLocaleString("es-AR",{minimumFractionDigits:n%1?2:0,maximumFractionDigits:2})}
 var VALIDEZ_PRESU=15;
+function hayDatosPago(){var t=S.taller||{};return !!(t.alias_pago||t.cbu_pago)}
+function cbuLindo(c){c=String(c||"").replace(/[^0-9]/g,"");return c.length===22?c.slice(0,8)+" "+c.slice(8):c}
 function imgADataUrl(url){return new Promise(function(res){if(!url){res(null);return}
   var im=new Image();im.crossOrigin="anonymous";
   im.onload=function(){try{var c=document.createElement("canvas"),k=Math.min(1,400/Math.max(im.width,im.height));c.width=im.width*k;c.height=im.height*k;
@@ -896,9 +900,23 @@ async function armarPDF(){
   doc.setFont("helvetica","normal");doc.setFontSize(9);doc.setTextColor.apply(doc,GRIS);
   doc.text("Válido por "+VALIDEZ_PRESU+" días (hasta el "+vence.toLocaleDateString("es-AR")+").",14,y+6);
   doc.text("Los precios de repuestos pueden variar según disponibilidad.",14,y+11);
+  if(hayDatosPago()){
+   var yp=y+22,filas=[];
+   if(t.alias_pago)filas.push(["Alias",t.alias_pago]);
+   if(t.cbu_pago)filas.push(["CBU/CVU",cbuLindo(t.cbu_pago)]);
+   if(t.titular_pago)filas.push(["Titular",t.titular_pago]);
+   var altoP=12+filas.length*6;
+   if(yp+altoP>270){doc.addPage();yp=20}
+   doc.setDrawColor.apply(doc,NARANJA);doc.setLineWidth(.6);doc.roundedRect(14,yp,182,altoP,2,2,"S");doc.setLineWidth(.2);
+   doc.setFont("helvetica","bold");doc.setFontSize(7.5);doc.setTextColor.apply(doc,GRIS);doc.text("PARA PAGAR POR TRANSFERENCIA",19,yp+6.5);
+   filas.forEach(function(f,i){var yy=yp+13+i*6;
+    doc.setFont("helvetica","normal");doc.setFontSize(9);doc.setTextColor.apply(doc,GRIS);doc.text(f[0],19,yy);
+    doc.setFont("helvetica","bold");doc.setFontSize(f[0]==="Alias"?12:10);doc.setTextColor.apply(doc,NEGRO);doc.text(String(f[1]),45,yy)});
+   y=yp+altoP-22;
+  }
   // conformidad y pie
   var yf=Math.max(y+40,250);if(yf>270){doc.addPage();yf=250}
-  doc.setDrawColor.apply(doc,GRIS);doc.line(14,yf,84,yf);doc.setFontSize(8.5);doc.text("Conformidad del cliente",14,yf+5);
+  doc.setDrawColor.apply(doc,GRIS);doc.line(14,yf,84,yf);doc.setFont("helvetica","normal");doc.setTextColor.apply(doc,GRIS);doc.setFontSize(8.5);doc.text("Conformidad del cliente",14,yf+5);
   doc.setFontSize(7.5);doc.setTextColor(160,160,155);
   doc.text("Documento no válido como factura.",196,yf+5,{align:"right"});
   doc.text("Hecho con Torque & Orden",196,yf+10,{align:"right"});
@@ -926,7 +944,15 @@ function mensajePresupuesto(){
    "_"+ot+(veh?" · "+veh:"")+"_\n\n"+items+"\n\n"+
    "*TOTAL: "+plata(calcTotal())+"*\n\n"+
    "Válido por "+VALIDEZ_PRESU+" días. Si estás de acuerdo, respondé *OK* y arrancamos."+
+   (hayDatosPago()?"\n\n💳 *Para transferir*"+(t.alias_pago?"\nAlias: *"+t.alias_pago+"*":"")+(t.cbu_pago?"\nCBU/CVU: "+String(t.cbu_pago).replace(/[^0-9]/g,""):"")+(t.titular_pago?"\nTitular: "+t.titular_pago:""):"")+
    (t.direccion||t.telefono?"\n\n"+[t.direccion,t.telefono?"Tel. "+t.telefono:""].filter(Boolean).join(" · "):"");
+}
+async function copiarTexto(txt,okMsg){
+  var ok=false;
+  try{await navigator.clipboard.writeText(txt);ok=true}catch(e){
+   var ta=document.createElement("textarea");ta.value=txt;ta.style.cssText="position:fixed;opacity:0";document.body.appendChild(ta);ta.select();
+   try{ok=document.execCommand("copy")}catch(e2){}ta.remove()}
+  say("st",ok?okMsg:"No se pudo copiar automáticamente.",!ok);return ok;
 }
 async function copiarMensaje(){
   var msg=mensajePresupuesto(),ok=false;
@@ -1177,6 +1203,11 @@ function renderConfig(){
    "<label for='cinsta'>Instagram (usuario, sin @)</label><input id='cinsta' value=\""+esc(t.instagram||"")+"\">"+
    "<label for='cmaps'>Link de Google Maps</label><input id='cmaps' placeholder='https://maps.app.goo.gl/...' value=\""+esc(t.maps_url||"")+"\">"+
    "</div>"+
+   "<div class='card'><h2>Datos para cobrar</h2><p class='muted' style='margin-top:0'>Aparecen en los presupuestos (PDF y WhatsApp) para que el cliente te transfiera.</p>"+
+   "<label for='calias'>Alias</label><input id='calias' autocomplete='off' autocapitalize='none' placeholder='taller.ejemplo.mp' value=\""+esc(t.alias_pago||"")+"\">"+
+   "<label for='ccbu'>CBU / CVU (opcional)</label><input id='ccbu' inputmode='numeric' autocomplete='off' placeholder='22 números' value=\""+esc(t.cbu_pago||"")+"\">"+
+   "<label for='ctit'>Titular de la cuenta (opcional)</label><input id='ctit' autocomplete='off' value=\""+esc(t.titular_pago||"")+"\">"+
+   "</div>"+
    "<div id='st' class='status hide'></div>"+
    "<div class='btns'><button class='btn' id='guardarCfg'>Guardar</button></div>";
   document.getElementById("logoFile").onchange=function(e){
@@ -1268,8 +1299,14 @@ async function guardarConfig(){
   if(r.error){say("st",r.error.message,true);return}
   Object.assign(S.taller,{nombre:document.getElementById("cnom").value.trim(),telefono:document.getElementById("ctel").value.trim(),direccion:document.getElementById("cdir").value.trim(),instagram:document.getElementById("cinsta").value.trim(),maps_url:document.getElementById("cmaps").value.trim(),logo_url:logoUrl});
   pintarMarca();
-  say("st","Guardado.");
   nuevoLogo=null;
+  var pago={p_taller_id:S.taller.id,p_alias:document.getElementById("calias").value.trim(),p_cbu:document.getElementById("ccbu").value.trim(),p_titular:document.getElementById("ctit").value.trim()};
+  if(pago.p_alias||pago.p_cbu||pago.p_titular||S.taller.alias_pago||S.taller.cbu_pago||S.taller.titular_pago){
+   var rp=await sb.rpc("actualizar_pago_taller",pago);
+   if(rp.error){say("st",/actualizar_pago_taller|function|schema cache/i.test(rp.error.message)?"Se guardaron los datos del taller, pero no el alias: falta correr el SQL nuevo en Supabase.":rp.error.message,true);return}
+   S.taller.alias_pago=pago.p_alias||null;S.taller.cbu_pago=pago.p_cbu.replace(/[^0-9]/g,"")||null;S.taller.titular_pago=pago.p_titular||null;
+  }
+  say("st","Guardado.");
 }
 async function subirLogo(tallerId,file){
   try{
