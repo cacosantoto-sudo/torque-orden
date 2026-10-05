@@ -13,6 +13,7 @@
 - Copia diaria cifrada de la base (GitHub Actions) y "Copia de mis datos" en la app
 - Revisión de diseño y usabilidad (tamaños táctiles, etiquetas, textos, zonas seguras del celular)
 - Menú inferior (Panel, Clientes, Órdenes, Stock, Más), íconos SVG en lugar de emojis, borrar con "Deshacer", pantallas de carga y estados vacíos
+- Presupuesto en formato náutico (repuestos y materiales + mano de obra detallada, observación, materiales a cargo del cliente) en pantalla, WhatsApp y PDF
 
 ## Por hacer
 - **Backup en una base de datos aparte para los talleres del plan pago** (los usuarios a los que se les venda la app): una copia viva de sus datos en un segundo servidor, además de la copia diaria.
