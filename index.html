@@ -759,30 +759,80 @@ async function generarPost(){
 }
 
 /* ---------------- presupuesto ---------------- */
+// Dos formatos: "simple" (lista de ítems) y "nautico" (repuestos y materiales + mano de obra con descripción,
+// estilo presupuesto náutico). El formato y los textos del náutico se guardan como un ítem {tipo:"meta"} dentro de items.
 function money(n){return "$"+Number(n||0).toLocaleString("es-AR",{minimumFractionDigits:2,maximumFractionDigits:2})}
-function calcTotal(){return S.presu.items.reduce(function(s,it){return s+(Number(it.cantidad)||0)*(Number(it.precio)||0)},0)}
+function subItem(it){return (Number(it.cantidad)||0)*(Number(it.precio)||0)}
+function esNautico(){return !!(S.presu&&S.presu.meta&&S.presu.meta.formato==="nautico")}
+function itemVacio(tipo){return tipo==="mano"?{tipo:"mano",descripcion:"",detalle:"",cantidad:1,precio:0}:{descripcion:"",cantidad:1,precio:0}}
+function tipoItem(it){return it.tipo==="mano"?"mano":"repuesto"}
+function itemsDe(tipo){return S.presu.items.filter(function(it){return tipoItem(it)===tipo})}
+function itemsConDatos(lista){return lista.filter(function(it){return String(it.descripcion||"").trim()||Number(it.precio)})}
+function subtotalDe(tipo){return itemsDe(tipo).reduce(function(s,it){return s+subItem(it)},0)}
+function calcTotal(){
+  if(esNautico())return (S.presu.meta.materiales_cliente?0:subtotalDe("repuesto"))+subtotalDe("mano");
+  return S.presu.items.reduce(function(s,it){return s+subItem(it)},0)}
+function cargarPresu(data,nuevo){
+  var items=(data&&data.items)||[],meta=items.filter(function(it){return it&&it.tipo==="meta"})[0];
+  S.presu=data||{total:0,aprobado:false};
+  S.presu.items=items.filter(function(it){return it&&it.tipo!=="meta"});
+  if(!meta){var o=S.orden||{};
+   meta=nuevo&&S.taller.rubro==="nautica"
+    ?{formato:"nautico",trabajo:"",resumen:String(o.diagnostico||o.motivo||"").trim(),observacion:"",materiales_cliente:false}
+    :{formato:"simple"}}
+  delete meta.tipo;S.presu.meta=meta;
+  if(!S.presu.items.length)S.presu.items=[itemVacio()];
+  if(esNautico()&&!itemsDe("mano").length)S.presu.items.push(itemVacio("mano"));
+}
 async function renderPresuForm(){
   var o=S.orden;
   m.innerHTML="<h1>Presupuesto</h1><p class='muted'>OT "+String(o.numero).padStart(6,"0")+" · "+esc(o.clientes?o.clientes.nombre:"Sin cliente")+"</p><div id='box'>"+skel()+"</div>";
   var r=await sb.from("presupuestos").select("*").eq("orden_id",o.id).maybeSingle();
-  S.presu=r.data||{items:[],total:0,aprobado:false};
-  if(!S.presu.items||!S.presu.items.length)S.presu.items=[{descripcion:"",cantidad:1,precio:0}];
+  cargarPresu(r.data,!r.data);
   pintarPresu();
 }
-function pintarPresu(){
-  var box=document.getElementById("box");
-  var h="<div class='card'><h2>Ítems</h2><div id='items'>"+S.presu.items.map(function(it,i){
-    return "<div class='card' style='padding:10px;margin-bottom:8px'>"+
-      "<label for='d_"+i+"'>Descripción</label><input id='d_"+i+"' data-f='descripcion' data-i='"+i+"' value=\""+esc(it.descripcion)+"\">"+
+function tarjetaItem(it,i){
+  if(tipoItem(it)==="mano")return "<div class='card' style='padding:10px;margin-bottom:8px'>"+
+    "<div class='lr' style='gap:8px;align-items:flex-end'>"+
+     "<div style='flex:2'><label for='d_"+i+"'>Concepto</label><input id='d_"+i+"' data-f='descripcion' data-i='"+i+"' placeholder='Ej.: Service de 100 horas' value=\""+esc(it.descripcion)+"\"></div>"+
+     "<div style='flex:1'><label for='p_"+i+"'>Importe</label><input id='p_"+i+"' data-f='precio' data-i='"+i+"' inputmode='decimal' value='"+esc(it.precio)+"'></div>"+
+    "</div>"+
+    "<label for='x_"+i+"' style='margin-top:8px;display:block'>Descripción del trabajo</label><textarea id='x_"+i+"' rows='5' data-f='detalle' data-i='"+i+"' placeholder='Un párrafo, o &quot;El trabajo incluye:&quot; y una tarea por renglón empezando con guion'>"+esc(it.detalle)+"</textarea>"+
+    "<div class='lr' style='margin-top:8px'><span></span><button class='btn d' data-del='"+i+"' style='padding:6px 12px;min-height:0'>Quitar</button></div>"+
+   "</div>";
+  return "<div class='card' style='padding:10px;margin-bottom:8px'>"+
+      "<label for='d_"+i+"'>"+(esNautico()?"Repuesto o material":"Descripción")+"</label><input id='d_"+i+"' data-f='descripcion' data-i='"+i+"' value=\""+esc(it.descripcion)+"\">"+
       "<div class='lr' style='gap:8px;margin-top:8px;align-items:flex-end'>"+
        "<div style='flex:1'><label for='c_"+i+"'>Cantidad</label><input id='c_"+i+"' data-f='cantidad' data-i='"+i+"' inputmode='decimal' value='"+esc(it.cantidad)+"'></div>"+
        "<div style='flex:1'><label for='p_"+i+"'>Precio unit.</label><input id='p_"+i+"' data-f='precio' data-i='"+i+"' inputmode='decimal' value='"+esc(it.precio)+"'></div>"+
       "</div>"+
-      "<div class='lr' style='margin-top:8px'><span class='muted'>Subtotal: <span id='sub_"+i+"'>"+money((Number(it.cantidad)||0)*(Number(it.precio)||0))+"</span></span><button class='btn d' data-del='"+i+"' style='padding:6px 12px;min-height:0'>Quitar</button></div>"+
-    "</div>"
-  }).join("")+"</div>";
-  h+="<button class='btn o' id='add'>+ Agregar ítem</button>";
-  h+="<div class='lr' style='margin-top:16px;font-size:1.2rem;font-weight:700'><span>Total</span><span id='tot'>"+money(calcTotal())+"</span></div></div>";
+      "<div class='lr' style='margin-top:8px'><span class='muted'>Subtotal: <span id='sub_"+i+"'>"+money(subItem(it))+"</span></span><button class='btn d' data-del='"+i+"' style='padding:6px 12px;min-height:0'>Quitar</button></div>"+
+    "</div>";
+}
+function pintarPresu(){
+  var box=document.getElementById("box"),M=S.presu.meta,h="";
+  function lista(tipo){return S.presu.items.map(function(it,i){return tipoItem(it)===tipo||!esNautico()?tarjetaItem(it,i):""}).join("")}
+  h+="<div class='card'><label for='formato'>Formato</label><select id='formato'>"+
+    "<option value='simple'"+(esNautico()?"":" selected")+">Simple (lista de ítems)</option>"+
+    "<option value='nautico'"+(esNautico()?" selected":"")+">Náutico (repuestos + mano de obra)</option></select></div>";
+  if(esNautico()){
+   h+="<div class='card'><h2>Trabajo</h2>"+
+     "<label for='m_trabajo'>Tipo de trabajo</label><input id='m_trabajo' data-m='trabajo' placeholder='Ej.: Service completo y cambio de impulsor' value=\""+esc(M.trabajo)+"\">"+
+     "<label for='m_resumen' style='margin-top:8px;display:block'>Resumen</label><textarea id='m_resumen' data-m='resumen' placeholder='Párrafo breve que resume el trabajo'>"+esc(M.resumen)+"</textarea>"+
+     "<label class='lr' style='margin-top:10px;justify-content:flex-start'><input type='checkbox' id='m_matcli'"+(M.materiales_cliente?" checked":"")+" style='width:auto;min-height:0'> <span>Los materiales corren por cuenta del cliente</span></label></div>";
+   if(!M.materiales_cliente)h+="<div class='card'><h2>Repuestos y materiales</h2>"+lista("repuesto")+
+     "<button class='btn o' id='addRep'>+ Agregar repuesto</button>"+
+     "<div class='lr' style='margin-top:12px;font-weight:700'><span>Subtotal repuestos y materiales</span><span id='subRep'>"+money(subtotalDe("repuesto"))+"</span></div></div>";
+   h+="<div class='card'><h2>Mano de obra y reparaciones</h2>"+lista("mano")+
+     "<button class='btn o' id='addMano'>+ Agregar trabajo</button>"+
+     "<div class='lr' style='margin-top:12px;font-weight:700'><span>Subtotal mano de obra y reparaciones</span><span id='subMano'>"+money(subtotalDe("mano"))+"</span></div></div>";
+   h+="<div class='card'><h2>Observación</h2><textarea id='m_obs' data-m='observacion' placeholder='Estado del motor, piezas no disponibles, adaptaciones… (opcional)'>"+esc(M.observacion)+"</textarea>"+
+     "<div class='lr' style='margin-top:16px;font-size:1.2rem;font-weight:700'><span>Total</span><span id='tot'>"+money(calcTotal())+"</span></div></div>";
+  }else{
+   h+="<div class='card'><h2>Ítems</h2><div id='items'>"+lista("repuesto")+"</div>";
+   h+="<button class='btn o' id='add'>+ Agregar ítem</button>";
+   h+="<div class='lr' style='margin-top:16px;font-size:1.2rem;font-weight:700'><span>Total</span><span id='tot'>"+money(calcTotal())+"</span></div></div>";
+  }
   h+="<div id='st' class='status hide'></div>";
   h+="<div class='btns'>"+
     "<button class='btn' id='guardar'>Guardar presupuesto</button>"+
@@ -795,15 +845,26 @@ function pintarPresu(){
     (S.presu.id?"<button class='btn d' id='delPresu'>Eliminar presupuesto</button>":"")+
   "</div>";
   box.innerHTML=h;
+  function refrescarTotales(){
+    [["subRep","repuesto"],["subMano","mano"]].forEach(function(x){var el=document.getElementById(x[0]);if(el)el.textContent=money(subtotalDe(x[1]))});
+    var totEl=document.getElementById("tot");if(totEl)totEl.textContent=money(calcTotal());
+  }
   box.querySelectorAll("[data-f]").forEach(function(el){el.oninput=function(){
     var i=Number(el.dataset.i),f=el.dataset.f;
-    S.presu.items[i][f]=(f==="descripcion")?el.value:el.value;
-    var sub=(Number(S.presu.items[i].cantidad)||0)*(Number(S.presu.items[i].precio)||0);
-    var subEl=document.getElementById("sub_"+i);if(subEl)subEl.textContent=money(sub);
-    var totEl=document.getElementById("tot");if(totEl)totEl.textContent=money(calcTotal());
+    S.presu.items[i][f]=el.value;
+    var subEl=document.getElementById("sub_"+i);if(subEl)subEl.textContent=money(subItem(S.presu.items[i]));
+    refrescarTotales();
   }});
-  box.querySelectorAll("[data-del]").forEach(function(b){b.onclick=function(){S.presu.items.splice(Number(b.dataset.del),1);if(!S.presu.items.length)S.presu.items=[{descripcion:"",cantidad:1,precio:0}];pintarPresu()}});
-  document.getElementById("add").onclick=function(){S.presu.items.push({descripcion:"",cantidad:1,precio:0});pintarPresu()};
+  box.querySelectorAll("[data-m]").forEach(function(el){el.oninput=function(){M[el.dataset.m]=el.value}});
+  box.querySelectorAll("[data-del]").forEach(function(b){b.onclick=function(){
+    var i=Number(b.dataset.del),tipo=tipoItem(S.presu.items[i]);S.presu.items.splice(i,1);
+    if(!S.presu.items.length||(esNautico()&&!itemsDe(tipo).length))S.presu.items.push(itemVacio(esNautico()?tipo:""));pintarPresu()}});
+  document.getElementById("formato").onchange=function(){
+    var f=this.value;S.presu.meta.formato=f;
+    if(f==="nautico"){var o=S.orden;if(M.resumen==null)M.resumen=String(o.diagnostico||o.motivo||"").trim();if(!itemsDe("mano").length)S.presu.items.push(itemVacio("mano"))}
+    pintarPresu()};
+  var mc=document.getElementById("m_matcli");if(mc)mc.onchange=function(){M.materiales_cliente=mc.checked;pintarPresu()};
+  [["add","repuesto"],["addRep","repuesto"],["addMano","mano"]].forEach(function(x){var b=document.getElementById(x[0]);if(b)b.onclick=function(){S.presu.items.push(itemVacio(x[1]==="mano"?"mano":""));pintarPresu()}});
   document.getElementById("guardar").onclick=guardarPresupuesto;
   document.getElementById("pdf").onclick=generarPDF;
   document.getElementById("wa").onclick=enviarWhatsApp;
@@ -818,15 +879,17 @@ async function eliminarPresupuesto(){
   if(!confirm("¿Eliminar este presupuesto? No se puede deshacer."))return;
   var r=await sb.from("presupuestos").delete().eq("id",S.presu.id);
   if(r.error){alert(r.error.message);return}
-  S.presu={items:[{descripcion:"",cantidad:1,precio:0}],total:0,aprobado:false};
+  var formato=S.presu.meta.formato;cargarPresu(null,false);S.presu.meta.formato=formato;
+  if(esNautico()){S.presu.meta.resumen="";S.presu.items.push(itemVacio("mano"))}
   pintarPresu();
 }
 async function guardarPresupuesto(){
   say("st","Guardando…");
-  var data={taller_id:S.taller.id,orden_id:S.orden.id,items:S.presu.items,total:calcTotal()};
+  var meta=Object.assign({tipo:"meta"},S.presu.meta);
+  var data={taller_id:S.taller.id,orden_id:S.orden.id,items:[meta].concat(S.presu.items),total:calcTotal()};
   var r=await sb.from("presupuestos").upsert(data,{onConflict:"orden_id"}).select().single();
   if(r.error){say("st",r.error.message,true);return null}
-  S.presu=r.data;say("st","Presupuesto guardado.");return r.data;
+  cargarPresu(r.data,false);say("st","Presupuesto guardado.");return r.data;
 }
 // Montos sin ",00" cuando son enteros
 function plata(n){n=Number(n)||0;return "$"+n.toLocaleString("es-AR",{minimumFractionDigits:n%1?2:0,maximumFractionDigits:2})}
@@ -838,6 +901,46 @@ function imgADataUrl(url){return new Promise(function(res){if(!url){res(null);re
   im.onload=function(){try{var c=document.createElement("canvas"),k=Math.min(1,400/Math.max(im.width,im.height));c.width=im.width*k;c.height=im.height*k;
    c.getContext("2d").drawImage(im,0,0,c.width,c.height);res({src:c.toDataURL("image/png"),w:c.width,h:c.height})}catch(e){res(null)}};
   im.onerror=function(){res(null)};im.src=url;setTimeout(function(){res(null)},4000)})}
+function cuerpoNauticoPDF(doc,y,C){
+  var M=S.presu.meta;
+  var reps=M.materiales_cliente?[]:itemsConDatos(itemsDe("repuesto")),manos=itemsConDatos(itemsDe("mano"));
+  var sr=reps.reduce(function(s,it){return s+subItem(it)},0),sm=manos.reduce(function(s,it){return s+subItem(it)},0);
+  function color(c){doc.setTextColor.apply(doc,c)}
+  function salto(h){if(y+h>262){doc.addPage();y=20}}
+  function titulo(txt){salto(18);doc.setFont("helvetica","bold");doc.setFontSize(8);color(C.GRIS);doc.text(txt,14,y);
+   doc.setFillColor.apply(doc,C.NARANJA);doc.rect(14,y+2,182,.5,"F");y+=8}
+  function parrafo(txt,tam,col){doc.setFont("helvetica","normal");doc.setFontSize(tam||10);color(col||C.NEGRO);
+   String(txt).split("\n").forEach(function(r){doc.splitTextToSize(r||" ",182).forEach(function(l){salto(5);doc.text(l,14,y);y+=(tam||10)*.5})});y+=3}
+  function filaTotal(txt,monto){salto(9);doc.setDrawColor.apply(doc,C.LINEA);doc.line(14,y-4,196,y-4);
+   doc.setFont("helvetica","bold");doc.setFontSize(10);color(C.NEGRO);doc.text(txt,14,y+1);doc.text(plata(monto),196,y+1,{align:"right"});y+=9}
+  if(String(M.trabajo||"").trim()){doc.setFont("helvetica","bold");doc.setFontSize(13);color(C.NEGRO);
+   doc.splitTextToSize(String(M.trabajo).trim().toUpperCase(),182).forEach(function(l){salto(7);doc.text(l,14,y);y+=6.5});y+=1}
+  if(String(M.resumen||"").trim())parrafo(String(M.resumen).trim());
+  y+=1;
+  if(reps.length){
+   titulo("REPUESTOS Y MATERIALES");
+   doc.setFontSize(10);
+   reps.forEach(function(it,i){
+    var c=Number(it.cantidad)||0,txt=String(it.descripcion||"").trim()+(c!==1?"  (x"+String(it.cantidad).replace(".",",")+")":"");
+    doc.setFont("helvetica","normal");var ls=doc.splitTextToSize(txt,140),alto=Math.max(7.5,ls.length*5+2.5);salto(alto);
+    if(i%2===1){doc.setFillColor.apply(doc,C.CLARO);doc.rect(14,y-5,182,alto,"F")}
+    color(C.NEGRO);doc.text(ls,17,y);doc.text(plata(subItem(it)),193,y,{align:"right"});y+=alto});
+   y+=4;filaTotal("Subtotal repuestos y materiales",sr);
+  }
+  if(manos.length){
+   titulo("MANO DE OBRA Y REPARACIONES");
+   manos.forEach(function(it){
+    doc.setFont("helvetica","bold");doc.setFontSize(10.5);var ls=doc.splitTextToSize(String(it.descripcion||"").trim()||"-",140);salto(ls.length*5.5+4);
+    color(C.NEGRO);doc.text(ls,14,y);doc.text(plata(subItem(it)),196,y,{align:"right"});y+=ls.length*5.5+.5;
+    if(String(it.detalle||"").trim())parrafo(String(it.detalle).trim(),9.5,C.GRIS);else y+=2;
+    y+=1});
+   y+=2;filaTotal((reps.length?"Subtotal":"Total")+" mano de obra y reparaciones",sm);
+  }
+  // en el PDF los subtotales ya están en cada sección; el total va en el recuadro naranja
+  var obs=[String(M.observacion||"").trim(),M.materiales_cliente?"Los materiales no están incluidos en el presente presupuesto y corren por cuenta del cliente.":""].filter(Boolean);
+  if(obs.length){y+=2;titulo("OBSERVACIÓN");parrafo(obs.join("\n\n"))}
+  return y+2;
+}
 async function armarPDF(){
   var o=S.orden,t=S.taller,J=window.jspdf.jsPDF,doc=new J({unit:"mm",format:"a4"});
   var ot="OT "+String(o.numero).padStart(6,"0"),hoy=new Date(),vence=new Date(hoy.getTime()+VALIDEZ_PRESU*864e5);
@@ -865,33 +968,37 @@ async function armarPDF(){
   caja(14,"CLIENTE",[o.clientes?o.clientes.nombre:"-",o.clientes&&o.clientes.telefono?"Tel. "+o.clientes.telefono:""]);
   var veh=o.equipos?o.equipos.nombre:(o.motores?[o.motores.marca,o.motores.modelo].filter(Boolean).join(" "):"-");
   var det=[o.equipos&&o.equipos.matricula_patente?patenteLabel()+" "+o.equipos.matricula_patente:"",o.medidor?medidorLabel()+": "+Number(o.medidor).toLocaleString("es-AR"):""].filter(Boolean).join("  ·  ");
-  caja(108,equipoLabel().toUpperCase(),[veh,det]);
-  // trabajo a realizar
+  if(esNautico()&&o.motores)caja(108,"MOTOR",[motorTexto(o)||"-",[o.equipos?o.equipos.nombre:"",o.equipos&&o.equipos.matricula_patente?o.equipos.matricula_patente:""].filter(Boolean).join("  ·  ")]);
+  else caja(108,equipoLabel().toUpperCase(),[veh,det]);
   y=86;
-  var trabajo=String(o.diagnostico||o.motivo||"").trim();
-  if(trabajo){
-   doc.setFont("helvetica","normal");doc.setFontSize(10);var tl=doc.splitTextToSize(trabajo,176).slice(0,6);
-   doc.setFont("helvetica","bold");doc.setFontSize(7.5);doc.setTextColor.apply(doc,GRIS);doc.text(o.diagnostico?"DIAGNÓSTICO":"MOTIVO DE INGRESO",14,y);
-   doc.setFillColor.apply(doc,NARANJA);doc.rect(14,y+2.5,1.2,tl.length*5+1,"F");
-   doc.setFont("helvetica","normal");doc.setFontSize(10);doc.setTextColor.apply(doc,NEGRO);doc.text(tl,19,y+6.5);
-   y+=tl.length*5+12;
+  if(esNautico())y=cuerpoNauticoPDF(doc,y,{NEGRO:NEGRO,NARANJA:NARANJA,GRIS:GRIS,CLARO:CLARO,LINEA:LINEA});
+  else{
+    // trabajo a realizar
+    var trabajo=String(o.diagnostico||o.motivo||"").trim();
+    if(trabajo){
+     doc.setFont("helvetica","normal");doc.setFontSize(10);var tl=doc.splitTextToSize(trabajo,176).slice(0,6);
+     doc.setFont("helvetica","bold");doc.setFontSize(7.5);doc.setTextColor.apply(doc,GRIS);doc.text(o.diagnostico?"DIAGNÓSTICO":"MOTIVO DE INGRESO",14,y);
+     doc.setFillColor.apply(doc,NARANJA);doc.rect(14,y+2.5,1.2,tl.length*5+1,"F");
+     doc.setFont("helvetica","normal");doc.setFontSize(10);doc.setTextColor.apply(doc,NEGRO);doc.text(tl,19,y+6.5);
+     y+=tl.length*5+12;
+    }
+    // tabla
+    y+=6;
+    doc.setFillColor.apply(doc,NEGRO);doc.rect(14,y-6,182,9,"F");
+    doc.setFont("helvetica","bold");doc.setFontSize(8.5);doc.setTextColor(255,255,255);
+    doc.text("DESCRIPCIÓN",18,y);doc.text("CANT.",122,y,{align:"right"});doc.text("P. UNITARIO",158,y,{align:"right"});doc.text("SUBTOTAL",192,y,{align:"right"});
+    y+=9;doc.setFont("helvetica","normal");doc.setFontSize(10);
+    S.presu.items.filter(function(it){return String(it.descripcion||"").trim()||Number(it.precio)}).forEach(function(it,i){
+     var lineas=doc.splitTextToSize(String(it.descripcion||""),95),alto=Math.max(9,lineas.length*5+4);
+     if(y+alto>255){doc.addPage();y=20}
+     if(i%2===1){doc.setFillColor.apply(doc,CLARO);doc.rect(14,y-6,182,alto,"F")}
+     doc.setTextColor.apply(doc,NEGRO);doc.text(lineas,18,y);
+     doc.setTextColor.apply(doc,GRIS);doc.text(String(it.cantidad||0),122,y,{align:"right"});doc.text(plata(it.precio),158,y,{align:"right"});
+     doc.setTextColor.apply(doc,NEGRO);doc.text(plata((Number(it.cantidad)||0)*(Number(it.precio)||0)),192,y,{align:"right"});
+     y+=alto;
+    });
+    doc.setDrawColor.apply(doc,LINEA);doc.line(14,y-3,196,y-3);
   }
-  // tabla
-  y+=6;
-  doc.setFillColor.apply(doc,NEGRO);doc.rect(14,y-6,182,9,"F");
-  doc.setFont("helvetica","bold");doc.setFontSize(8.5);doc.setTextColor(255,255,255);
-  doc.text("DESCRIPCIÓN",18,y);doc.text("CANT.",122,y,{align:"right"});doc.text("P. UNITARIO",158,y,{align:"right"});doc.text("SUBTOTAL",192,y,{align:"right"});
-  y+=9;doc.setFont("helvetica","normal");doc.setFontSize(10);
-  S.presu.items.filter(function(it){return String(it.descripcion||"").trim()||Number(it.precio)}).forEach(function(it,i){
-   var lineas=doc.splitTextToSize(String(it.descripcion||""),95),alto=Math.max(9,lineas.length*5+4);
-   if(y+alto>255){doc.addPage();y=20}
-   if(i%2===1){doc.setFillColor.apply(doc,CLARO);doc.rect(14,y-6,182,alto,"F")}
-   doc.setTextColor.apply(doc,NEGRO);doc.text(lineas,18,y);
-   doc.setTextColor.apply(doc,GRIS);doc.text(String(it.cantidad||0),122,y,{align:"right"});doc.text(plata(it.precio),158,y,{align:"right"});
-   doc.setTextColor.apply(doc,NEGRO);doc.text(plata((Number(it.cantidad)||0)*(Number(it.precio)||0)),192,y,{align:"right"});
-   y+=alto;
-  });
-  doc.setDrawColor.apply(doc,LINEA);doc.line(14,y-3,196,y-3);
   // total
   y+=4;if(y>255){doc.addPage();y=20}
   doc.setFillColor.apply(doc,NARANJA);doc.roundedRect(116,y,80,15,2,2,"F");
@@ -934,7 +1041,38 @@ async function generarPDF(){
   r.doc.save(r.nombre);
   say("st","PDF descargado. Adjuntalo en el chat de WhatsApp del cliente.");
 }
+function motorTexto(o){return o.motores?[o.motores.marca,o.motores.modelo].filter(Boolean).join(" "):""}
+function mensajeNautico(){
+  var o=S.orden,t=S.taller,M=S.presu.meta,L=[];
+  var reps=M.materiales_cliente?[]:itemsConDatos(itemsDe("repuesto")),manos=itemsConDatos(itemsDe("mano"));
+  var sr=reps.reduce(function(s,it){return s+subItem(it)},0),sm=manos.reduce(function(s,it){return s+subItem(it)},0);
+  L.push("*"+String(t.nombre||"").toUpperCase()+"*","");
+  if(o.clientes&&o.clientes.nombre)L.push("*Cliente:* "+o.clientes.nombre);
+  if(motorTexto(o))L.push("*Motor:* "+motorTexto(o));
+  if(o.equipos&&o.equipos.nombre)L.push("*"+equipoLabel()+":* "+o.equipos.nombre+(o.equipos.matricula_patente?" ("+o.equipos.matricula_patente+")":""));
+  L.push("");
+  if(String(M.trabajo||"").trim())L.push("*"+String(M.trabajo).trim().toUpperCase()+"*","");
+  if(String(M.resumen||"").trim())L.push(String(M.resumen).trim(),"");
+  if(reps.length){
+   L.push("*REPUESTOS Y MATERIALES*","");
+   reps.forEach(function(it){var c=Number(it.cantidad)||0;L.push("- "+String(it.descripcion||"").trim()+(c!==1?" (x"+String(it.cantidad).replace(".",",")+")":"")+": "+plata(subItem(it)))});
+   L.push("","*Subtotal repuestos y materiales: "+plata(sr)+"*","");
+  }
+  if(manos.length){
+   L.push("*MANO DE OBRA Y REPARACIONES*","");
+   manos.forEach(function(it){L.push("*"+String(it.descripcion||"").trim()+": "+plata(subItem(it))+"*","");if(String(it.detalle||"").trim())L.push(String(it.detalle).trim(),"")});
+   L.push("*"+(reps.length?"Subtotal":"Total")+" mano de obra y reparaciones: "+plata(sm)+"*","");
+  }
+  if(reps.length&&manos.length)L.push("*TOTAL GENERAL*","","Repuestos y materiales: "+plata(sr),"Mano de obra y reparaciones: "+plata(sm),"");
+  if(reps.length||!manos.length)L.push("*TOTAL: "+plata(sr+sm)+"*","");
+  var obs=[String(M.observacion||"").trim(),M.materiales_cliente?"Los materiales no están incluidos en el presente presupuesto y corren por cuenta del cliente.":""].filter(Boolean);
+  if(obs.length)L.push("*OBSERVACIÓN*","",obs.join("\n\n"),"");
+  if(hayDatosPago()){L.push("*DATOS PARA TRANSFERENCIA*");if(t.alias_pago)L.push("Alias: *"+t.alias_pago+"*");if(t.cbu_pago)L.push("CBU/CVU: "+String(t.cbu_pago).replace(/[^0-9]/g,""));if(t.titular_pago)L.push("Titular: "+t.titular_pago);L.push("")}
+  if(t.direccion||t.telefono)L.push([t.direccion,t.telefono?"Tel. "+t.telefono:""].filter(Boolean).join(" · "));
+  return L.join("\n").replace(/\n{3,}/g,"\n\n").trim();
+}
 function mensajePresupuesto(){
+  if(esNautico())return mensajeNautico();
   var o=S.orden,t=S.taller,ot="OT "+String(o.numero).padStart(6,"0");
   var veh=o.equipos?o.equipos.nombre+(o.equipos.matricula_patente?" ("+o.equipos.matricula_patente+")":""):"";
   var nombre=o.clientes&&o.clientes.nombre?o.clientes.nombre.split(" ")[0]:"";
@@ -971,7 +1109,7 @@ async function aprobarPresupuesto(){
   if(!saved)return;
   var r=await sb.from("presupuestos").update({aprobado:true}).eq("id",saved.id).select().single();
   if(r.error){say("st",r.error.message,true);return}
-  S.presu=r.data;
+  cargarPresu(r.data,false);
   await sb.from("ordenes").update({estado:"Aprobado"}).eq("id",S.orden.id);
   S.orden.estado="Aprobado";
   pintarPresu();
