@@ -9,6 +9,7 @@ def get(url, binary=False, tries=14):
     for i in range(tries):
         r=subprocess.run(["curl","-sS","-L","-A",UA,"-o",p+".tmp","-w","%{http_code}","--max-time","90",url],capture_output=True,text=True)
         code=r.stdout.strip()
+        if code in ("400","404"): break
         if code=="200":
             os.rename(p+".tmp",p); time.sleep(1.0)
             return get(url,binary)

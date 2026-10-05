@@ -189,7 +189,7 @@ def car_page(c, car, idx, total, page):
     c.line(M + 6 * mm, y_info - 3.5 * mm, W - M - 6 * mm, y_info - 3.5 * mm)
 
     # right column
-    colw = 66 * mm
+    colw = 58 * mm
     colx = W - M - 6 * mm - colw
     top = y_info - 7 * mm
     # reference photo
@@ -213,29 +213,32 @@ def car_page(c, car, idx, total, page):
     fy_top = yy - 4 * mm
     c.setFont("NunitoX", 9); c.setFillColor(INK)
     c.drawString(colx, fy_top - 3 * mm, f"Pintá la bandera de {FLAGS[car['flag']]}:")
-    fw = 54 * mm; fh = fw * 0.6
+    fw = 50 * mm; fh = fw * 0.6
     if car["flag"] == "reinounido": fh = fw * 0.5
     if car["flag"] == "eeuu": fh = fw * 0.53
     fx = colx + (colw - fw) / 2; fyy = fy_top - 7 * mm - fh
     flag(c, car["flag"], fx, fyy, fw, fh)
 
-    # fun fact box (bottom left)
-    boxx = M + 6 * mm; boxw = colx - boxx - 6 * mm
-    lines = simpleSplit(car["fact"], "Nunito", 10.5, boxw - 30 * mm)
-    boxh = max(20 * mm, (len(lines) * 13.5) + 9 * mm)
-    boxy = M + 5 * mm
-    rrect(c, boxx, boxy, boxw, boxh, r=4 * mm, lw=1.4, col=HexColor(SEC[car["sec"]][3]), fill=1, fillcol=HexColor("#fbfbfb"))
-    c.setFont("Baloo", 13); c.setFillColor(HexColor(SEC[car["sec"]][3]))
-    c.drawString(boxx + 4 * mm, boxy + boxh - 8 * mm, "¿Sabías")
-    c.drawString(boxx + 4 * mm, boxy + boxh - 13.5 * mm, "que...?")
-    c.setFont("Nunito", 10.5); c.setFillColor(INK)
-    ty = boxy + boxh - 7.5 * mm
+    # fun fact box (right column, under the flag)
+    boxx = colx; boxw = colw; boxy = M + 5 * mm
+    fs = 10
+    while True:
+        lines = simpleSplit(car["fact"], "Nunito", fs, boxw - 8 * mm)
+        boxh = 11 * mm + len(lines) * fs * 1.3 + 3 * mm
+        if boxy + boxh < fyy - 5 * mm or fs <= 8: break
+        fs -= 0.5
+    col_s = HexColor(SEC[car["sec"]][3])
+    rrect(c, boxx, boxy, boxw, boxh, r=4 * mm, lw=1.4, col=col_s, fill=1, fillcol=HexColor("#fbfbfb"))
+    c.setFont("Baloo", 13); c.setFillColor(col_s)
+    c.drawString(boxx + 4 * mm, boxy + boxh - 8 * mm, "¿Sabías que...?")
+    c.setFont("Nunito", fs); c.setFillColor(INK)
+    ty = boxy + boxh - 13.5 * mm
     for ln in lines:
-        c.drawString(boxx + 27 * mm, ty, ln); ty -= 13.5
+        c.drawString(boxx + 4 * mm, ty, ln); ty -= fs * 1.3
 
-    # line art (main area)
-    ax0, ax1 = boxx, colx - 6 * mm
-    ay0, ay1 = boxy + boxh + 4 * mm, y_info - 6 * mm
+    # line art (main area: everything left of the column)
+    ax0, ax1 = M + 6 * mm, colx - 6 * mm
+    ay0, ay1 = M + 7 * mm, y_info - 6 * mm
     jp, (iw, ih) = bw(f"art/{k}_line.png")
     aw, ah = ax1 - ax0, ay1 - ay0
     s = min(aw / iw, ah / ih)
