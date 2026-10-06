@@ -153,6 +153,7 @@ table.t{width:100%;border-collapse:collapse;font-size:.9rem}table.t th,table.t t
 <script src="js/ordenes.js"></script>
 <script src="js/neumaticos.js"></script>
 <script src="js/cajas.js"></script>
+<script src="js/proveedores.js"></script>
 <script>
 var CFG=window.SCOTTO_CONFIG;
 var sb=window.supabase.createClient(CFG.SUPABASE_URL,CFG.SUPABASE_ANON_KEY);
@@ -1210,7 +1211,7 @@ async function ajustarStock(id,delta){
 
 /* ---------------- menú Más ---------------- */
 function renderMas(){
-  var items=(esDueno()?[["caja","Cajas","wallet"],["reportes","Reportes","chart"],["plan","Mi Plan","crown"],["config","Configuración","sliders"]]:[["config","Configuración","sliders"]]);
+  var items=(esDueno()?[["caja","Cajas","wallet"],["proveedores","Proveedores","receipt"],["reportes","Reportes","chart"],["plan","Mi Plan","crown"],["config","Configuración","sliders"]]:[["proveedores","Proveedores","receipt"],["config","Configuración","sliders"]]);
   m.innerHTML="<h1>Más</h1><div style='height:14px'></div>"+items.map(function(x){return "<button class='fila' data-v='"+x[0]+"'>"+ic(x[2])+"<span>"+x[1]+"</span>"+ic("chevron")+"</button>"}).join("")+
    "<button class='fila' data-v='patente'>"+ic("camera")+"<span>Buscar por "+patenteLabel().toLowerCase()+"</span>"+ic("chevron")+"</button>";
   m.querySelectorAll(".fila[data-v]").forEach(function(b){b.onclick=function(){S.vista=b.dataset.v;route();window.scrollTo(0,0)}});
@@ -1296,6 +1297,7 @@ function renderPlan(){
   h+="<div class='card'><h2>Se suma con el plan Pago</h2><ul style='margin:0;padding-left:20px;color:var(--mute)'>"+
    "<li>Completar los campos de la orden automáticamente con IA (a partir de lo que dictás)</li>"+
    "<li>Lectura automática de datos desde una foto</li>"+
+   "<li>Lectura automática de facturas de compra de proveedores (foto o PDF)</li>"+
    "<li>Generador de posteos para Instagram con IA</li>"+
    "</ul></div>";
   h+="<div id='st' class='status hide'></div>";
@@ -1395,7 +1397,7 @@ function nombreArchivo(ext){return "torque-orden_"+norm(S.taller.nombre).replace
 async function exportarJson(){
   say("expSt","Preparando la copia…");
   try{
-   var tablas=["clientes","equipos","motores","ordenes","presupuestos","repuestos","movimientos_caja","fotos","mantenimientos","neumaticos","alineaciones","cajas"],datos={};
+   var tablas=["clientes","equipos","motores","ordenes","presupuestos","repuestos","movimientos_caja","fotos","mantenimientos","neumaticos","alineaciones","cajas","proveedores","compras","compra_items","pagos_proveedor","pago_aplicaciones"],datos={};
    // las tablas nuevas pueden no existir todavía si falta correr algún SQL
    for(var i=0;i<tablas.length;i++){try{datos[tablas[i]]=await traerTodo(tablas[i])}catch(e){if(i<8)throw e;datos[tablas[i]]=[]}}
    var total=tablas.reduce(function(s,t){return s+datos[t].length},0);
