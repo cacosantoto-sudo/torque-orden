@@ -51,6 +51,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 .tag{font-family:var(--f-mono);font-size:.75rem;font-weight:600;letter-spacing:.04em;text-transform:uppercase;padding:3px 8px;border-radius:4px;border:1px solid var(--line2);color:var(--mute);white-space:nowrap;background:var(--card2)}
 .tag.w{border-color:rgba(255,176,32,.5);color:var(--br);background:rgba(255,176,32,.08)}
 .tag.g{border-color:rgba(62,207,122,.5);color:var(--ok);background:rgba(62,207,122,.08)}
+img.logo-claro{background:#fff;border-radius:6px;padding:3px}
 .tag.bad{border-color:rgba(255,90,79,.5);color:var(--bad);background:rgba(255,90,79,.08)}
 label{display:block;font-family:var(--f-head);font-weight:600;font-size:.9rem;letter-spacing:.08em;text-transform:uppercase;color:var(--mute);margin:14px 0 6px}
 input,textarea,select{font:inherit;color:var(--ink);background:#0d0d0d;border:1px solid var(--line2);border-radius:10px;padding:11px 12px;width:100%;box-sizing:border-box;min-height:48px;transition:border-color .15s}
@@ -148,6 +149,7 @@ table.t{width:100%;border-collapse:collapse;font-size:.9rem}table.t th,table.t t
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 <script src="config.js"></script>
+<script src="js/logo.js"></script>
 <script src="js/vehiculos.js"></script>
 <script src="js/mantenimiento.js"></script>
 <script src="js/ordenes.js"></script>
@@ -938,11 +940,7 @@ function plata(n){n=Number(n)||0;return "$"+n.toLocaleString("es-AR",{minimumFra
 var VALIDEZ_PRESU=15;
 function hayDatosPago(){var t=S.taller||{};return !!(t.alias_pago||t.cbu_pago)}
 function cbuLindo(c){c=String(c||"").replace(/[^0-9]/g,"");return c.length===22?c.slice(0,8)+" "+c.slice(8):c}
-function imgADataUrl(url){return new Promise(function(res){if(!url){res(null);return}
-  var im=new Image();im.crossOrigin="anonymous";
-  im.onload=function(){try{var c=document.createElement("canvas"),k=Math.min(1,400/Math.max(im.width,im.height));c.width=im.width*k;c.height=im.height*k;
-   c.getContext("2d").drawImage(im,0,0,c.width,c.height);res({src:c.toDataURL("image/png"),w:c.width,h:c.height})}catch(e){res(null)}};
-  im.onerror=function(){res(null)};im.src=url;setTimeout(function(){res(null)},4000)})}
+function imgADataUrl(url){return recortarLogo(url,400)}
 function cuerpoNauticoPDF(doc,y,C){
   var M=S.presu.meta;
   var reps=M.materiales_cliente?[]:itemsConDatos(itemsDe("repuesto")),manos=itemsConDatos(itemsDe("mano"));
@@ -991,11 +989,15 @@ async function armarPDF(){
   doc.setFillColor.apply(doc,NEGRO);doc.rect(0,0,210,40,"F");
   doc.setFillColor.apply(doc,NARANJA);doc.rect(0,40,210,1.6,"F");
   var x0=14,logo=await imgADataUrl(t.logo_url);
-  if(logo){var tw=26,k=Math.min(20/logo.w,20/logo.h),lw=logo.w*k,lh=logo.h*k;doc.setFillColor(255,255,255);doc.roundedRect(14,7,tw,tw,3,3,"F");doc.addImage(logo.src,"PNG",14+(tw-lw)/2,7+(tw-lh)/2,lw,lh);x0=14+tw+7}
+  // logo recortado, sin marco blanco; solo si es un dibujo oscuro sobre fondo transparente lleva un fondo blanco ajustado
+  if(logo){var k=Math.min(42/logo.w,26/logo.h),lw=logo.w*k,lh=logo.h*k,ly=7+(26-lh)/2;
+   if(logo.transp&&logo.oscuro){doc.setFillColor(255,255,255);doc.roundedRect(13,ly-1,lw+2,lh+2,1.5,1.5,"F")}
+   doc.addImage(logo.src,"PNG",14,ly,lw,lh);x0=14+lw+7}
   doc.setTextColor(255,255,255);doc.setFont("helvetica","bold");doc.setFontSize(18);doc.text(String(t.nombre||"").toUpperCase(),x0,19);
   doc.setFont("helvetica","normal");doc.setFontSize(9);doc.setTextColor(200,200,195);
   var anchoC=196-x0-46,yC=26.5;
-  [t.direccion||"",[t.telefono?"Tel. "+t.telefono:"",t.instagram?"@"+String(t.instagram).replace(/^@/,""):""].filter(Boolean).join("   ·   ")].filter(Boolean).forEach(function(l){
+  var tels=telefonosDe(t.telefono),ig=instagramDe(t.instagram);
+  [t.direccion||"",tels.length?(tels.length>1?"Cel.: ":"Cel. ")+tels.join("  /  "):"",ig?"Instagram: @"+ig:""].filter(Boolean).forEach(function(l){
    doc.text(doc.splitTextToSize(l,anchoC)[0],x0,yC);yC+=5});
   doc.setFont("helvetica","bold");doc.setFontSize(9);doc.setTextColor.apply(doc,NARANJA);doc.text("PRESUPUESTO",196,15,{align:"right"});
   doc.setTextColor(255,255,255);doc.setFontSize(15);doc.text(ot,196,23,{align:"right"});
@@ -1110,9 +1112,12 @@ function mensajeNautico(){
   var obs=[String(M.observacion||"").trim(),M.materiales_cliente?"Los materiales no están incluidos en el presente presupuesto y corren por cuenta del cliente.":""].filter(Boolean);
   if(obs.length)L.push("*OBSERVACIÓN*","",obs.join("\n\n"),"");
   if(hayDatosPago()){L.push("*DATOS PARA TRANSFERENCIA*");if(t.alias_pago)L.push("Alias: *"+t.alias_pago+"*");if(t.cbu_pago)L.push("CBU/CVU: "+String(t.cbu_pago).replace(/[^0-9]/g,""));if(t.titular_pago)L.push("Titular: "+t.titular_pago);L.push("")}
-  if(t.direccion||t.telefono)L.push([t.direccion,t.telefono?"Tel. "+t.telefono:""].filter(Boolean).join(" · "));
+  contactoTaller(t).forEach(function(l){L.push(l)});
   return L.join("\n").replace(/\n{3,}/g,"\n\n").trim();
 }
+// Dirección, celulares e Instagram del taller para los mensajes de WhatsApp
+function contactoTaller(t){var tels=telefonosDe(t.telefono),ig=instagramDe(t.instagram);
+  return [t.direccion?"📍 "+t.direccion:"",tels.length?"📱 "+tels.join(" / "):"",ig?"📷 Instagram: @"+ig+" (instagram.com/"+ig+")":""].filter(Boolean)}
 function mensajePresupuesto(){
   if(esNautico())return mensajeNautico();
   var o=S.orden,t=S.taller,ot="OT "+String(o.numero).padStart(6,"0");
@@ -1125,7 +1130,7 @@ function mensajePresupuesto(){
    "*TOTAL: "+plata(calcTotal())+"*\n\n"+
    "Válido por "+VALIDEZ_PRESU+" días. Si estás de acuerdo, respondé *OK* y arrancamos."+
    (hayDatosPago()?"\n\n💳 *Para transferir*"+(t.alias_pago?"\nAlias: *"+t.alias_pago+"*":"")+(t.cbu_pago?"\nCBU/CVU: "+String(t.cbu_pago).replace(/[^0-9]/g,""):"")+(t.titular_pago?"\nTitular: "+t.titular_pago:""):"")+
-   (t.direccion||t.telefono?"\n\n"+[t.direccion,t.telefono?"Tel. "+t.telefono:""].filter(Boolean).join(" · "):"");
+   (contactoTaller(t).length?"\n\n"+contactoTaller(t).join("\n"):"");
 }
 async function copiarTexto(txt,okMsg){
   var ok=false;
@@ -1334,11 +1339,11 @@ function renderConfig(){
   }
   nuevoLogo=null;
   m.innerHTML="<h1>Configuración</h1><p class='muted'>Estos datos se muestran en la ficha pública que ve el cliente al escanear el QR.</p>"+
-   "<div class='card'><h2>Logo</h2><div id='logoPrev'>"+(t.logo_url?"<img src='"+esc(t.logo_url)+"' alt='Logo actual' style='max-width:120px;border-radius:10px'>":"<span class='muted'>Todavía no cargaste un logo.</span>")+"</div>"+
+   "<div class='card'><h2>Logo</h2><div id='logoPrev'>"+(t.logo_url?"<img src='"+esc(t.logo_url)+"' alt='Logo actual' data-recortar style='max-width:120px'>":"<span class='muted'>Todavía no cargaste un logo.</span>")+"</div>"+
    "<input type='file' id='logoFile' aria-label='Elegir logo del taller' accept='image/*' style='margin-top:10px'></div>"+
    "<div class='card'>"+
    "<label for='cnom'>Nombre del taller</label><input id='cnom' value=\""+esc(t.nombre)+"\">"+
-   "<label for='ctel'>Teléfono</label><input id='ctel' value=\""+esc(t.telefono||"")+"\">"+
+   "<label for='ctel'>Celulares del taller (si son varios, separalos con /)</label><input id='ctel' value=\""+esc(t.telefono||"")+"\">"+
    "<label for='cdir'>Dirección</label><input id='cdir' value=\""+esc(t.direccion||"")+"\">"+
    "<label for='cinsta'>Instagram (usuario, sin @)</label><input id='cinsta' value=\""+esc(t.instagram||"")+"\">"+
    "<label for='cmaps'>Link de Google Maps</label><input id='cmaps' placeholder='https://maps.app.goo.gl/...' value=\""+esc(t.maps_url||"")+"\">"+
@@ -1353,9 +1358,11 @@ function renderConfig(){
   document.getElementById("logoFile").onchange=function(e){
    var f=e.target.files[0];if(!f)return;
    nuevoLogo=f;
-   document.getElementById("logoPrev").innerHTML="<img src='"+URL.createObjectURL(f)+"' alt='Logo nuevo' style='max-width:120px;border-radius:10px'>";
+   document.getElementById("logoPrev").innerHTML="<img src='"+URL.createObjectURL(f)+"' alt='Logo nuevo' data-recortar style='max-width:120px'>";
+   recortarImagenes(document.getElementById("logoPrev"));
   };
   document.getElementById("guardarCfg").onclick=guardarConfig;
+  recortarImagenes(document.getElementById("logoPrev"));
   m.insertAdjacentHTML("beforeend","<div class='card'><h2>Recordatorios de mantenimiento</h2><label for='recMeses'>Recordar a los clientes cada (meses)</label><input id='recMeses' type='number' min='1' max='36' inputmode='numeric' value='"+mesesRecordatorio()+"'><p class='muted' style='margin:6px 0 0'>Se cuenta desde el último trabajo entregado.</p><div id='recSt' class='status hide'></div></div>");
   document.getElementById("recMeses").onchange=async function(){
    var el=this,v=Math.round(Number(el.value));
@@ -1433,12 +1440,12 @@ async function guardarConfig(){
    p_nombre:document.getElementById("cnom").value.trim(),
    p_telefono:document.getElementById("ctel").value.trim()||null,
    p_direccion:document.getElementById("cdir").value.trim()||null,
-   p_instagram:document.getElementById("cinsta").value.trim()||null,
+   p_instagram:instagramDe(document.getElementById("cinsta").value)||null,
    p_maps_url:document.getElementById("cmaps").value.trim()||null,
    p_logo_url:logoUrl
   });
   if(r.error){say("st",r.error.message,true);return}
-  Object.assign(S.taller,{nombre:document.getElementById("cnom").value.trim(),telefono:document.getElementById("ctel").value.trim(),direccion:document.getElementById("cdir").value.trim(),instagram:document.getElementById("cinsta").value.trim(),maps_url:document.getElementById("cmaps").value.trim(),logo_url:logoUrl});
+  Object.assign(S.taller,{nombre:document.getElementById("cnom").value.trim(),telefono:document.getElementById("ctel").value.trim(),direccion:document.getElementById("cdir").value.trim(),instagram:instagramDe(document.getElementById("cinsta").value),maps_url:document.getElementById("cmaps").value.trim(),logo_url:logoUrl});
   pintarMarca();
   nuevoLogo=null;
   var pago={p_taller_id:S.taller.id,p_alias:document.getElementById("calias").value.trim(),p_cbu:document.getElementById("ccbu").value.trim(),p_titular:document.getElementById("ctit").value.trim()};

@@ -317,6 +317,7 @@ async function renderPagoForm(){
   var cajas=rc.error?[]:(rc.data||[]);
   var pend=cta.compras.filter(function(c){return c.saldo>0});
   var deuda=redondo(pend.reduce(function(a,c){return a+c.saldo},0));
+  var saldoProv=redondo(cta.compras.reduce(function(a,c){return a+(Number(c.total)||0)},0)-cta.pagos.reduce(function(a,x){return a+(Number(x.importe)||0)},0));
   var h="<div class='card'><h2>"+esc(rp.data.nombre)+"</h2><div class='lr'><span class='muted'>Facturas pendientes</span><b>"+money(deuda)+"</b></div>"+
    "<div class='g2'><div><label for='pgFecha'>Fecha</label><input id='pgFecha' type='date' value='"+hoyISO()+"'></div><div><label for='pgImp'>Importe</label><input id='pgImp' inputmode='decimal' value=\""+(deuda?String(deuda).replace(".",","):"")+"\"></div></div>"+
    "<div class='g2'><div><label for='pgMedio'>Medio de pago</label><select id='pgMedio'>"+MEDIOS.map(function(md){return "<option value='"+md[0]+"'>"+md[1]+"</option>"}).join("")+"</select></div>"+
@@ -325,7 +326,8 @@ async function renderPagoForm(){
   h+="<div class='card'><h2>¿Qué facturas cancela?</h2><p class='muted' style='margin-top:0'>Se aplica primero a las más viejas. Lo que sobre queda como saldo a favor.</p>"+(pend.map(function(c){
    return "<label style='display:flex;gap:10px;align-items:center;padding:8px 0;border-top:1px solid var(--line);margin:0;text-transform:none;letter-spacing:normal;font-size:1rem;color:var(--ink);font-family:var(--f-body)'><input type='checkbox' data-fc='"+c.id+"' checked style='width:auto;min-height:0'>"+
     "<span style='flex:1'>"+(c.numero?"Nº "+esc(c.numero):"Sin número")+" · "+fechaAR(c.fecha)+" "+tagPago(c)+"<br><span class='muted' style='font-size:.85rem' data-ap='"+c.id+"'></span></span><b>"+money(c.saldo)+"</b></label>"}).join("")||"<p class='muted' style='margin:0'>No hay facturas pendientes: el pago queda como saldo a favor.</p>")+
-   "<div class='lr' style='margin-top:10px'><span class='muted'>Queda a favor</span><b id='pgSobra'>"+money(0)+"</b></div></div>";
+   "<div class='lr' style='margin-top:10px'><span class='muted'>Queda a favor</span><b id='pgSobra'>"+money(0)+"</b></div>"+
+   "<div class='lr'><span class='muted'>Saldo con el proveedor después del pago</span><b id='pgResta'>"+money(deuda)+"</b></div></div>";
   h+="<div id='pgSt' class='status hide'></div><div class='btns'><button class='btn' id='pgGuardar'>Registrar pago</button><button class='btn o' id='pgVolver'>Volver</button></div>";
   document.getElementById("box").innerHTML=h;
   function repartir(){
@@ -334,6 +336,7 @@ async function renderPagoForm(){
     if(x>0)ap.push({compra_id:c.id,importe:x});
     m.querySelector("[data-ap='"+c.id+"']").textContent=chk?(x>=c.saldo?"Se paga completa":x>0?"Se pagan "+money(x):"No alcanza el importe"):""});
    document.getElementById("pgSobra").textContent=money(resto>0?resto:0);
+   var sal=redondo(saldoProv-(numAR(document.getElementById("pgImp").value)||0));document.getElementById("pgResta").textContent=sal<0?money(-sal)+" a favor":money(sal);
    return ap;
   }
   repartir();

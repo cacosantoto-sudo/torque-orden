@@ -19,7 +19,8 @@ h1{font-size:2rem;font-weight:800}
 h2{font-size:1.1rem;font-weight:700;letter-spacing:.07em;display:flex;align-items:center;gap:8px;margin-bottom:10px}
 h2::before{content:"";width:4px;height:1em;background:var(--ac);border-radius:2px}
 .top{background:#0a0a0a;color:#fff;padding:22px 16px 18px;text-align:center;border-bottom:3px solid var(--ac)}
-.top img{max-width:120px;max-height:80px;border-radius:10px;background:#fff;padding:6px}
+.top img{max-width:160px;max-height:90px}
+.top img.logo-claro{background:#fff;border-radius:6px;padding:4px}
 .top b{display:block;font-family:"Barlow Condensed",sans-serif;font-size:1.5rem;letter-spacing:.04em;text-transform:uppercase;margin-top:8px}
 .top span{color:#bbb;font-size:.85rem;letter-spacing:.12em;text-transform:uppercase}
 .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-top:14px}
@@ -57,6 +58,7 @@ nav.idx a{font:600 .8rem/1 "Barlow",sans-serif;text-transform:uppercase;letter-s
 <div id="m"><main><p style="padding-top:40px">Cargando…</p></main></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="config.js"></script>
+<script src="js/logo.js"></script>
 <script>
 var CFG=window.SCOTTO_CONFIG;
 var sb=window.supabase.createClient(CFG.SUPABASE_URL,CFG.SUPABASE_ANON_KEY);
@@ -99,7 +101,7 @@ function detalle(x){
   NAUT=t.rubro==="nautica";
   var titulo=v.nombre||[v.marca,v.modelo].filter(Boolean).join(" ")||"Vehículo";
   document.title=titulo+" · Libro de mantenimiento";
-  var h="<div class='top'>"+(t.logo?"<img src='"+esc(t.logo)+"' alt=''>":"")+"<b>"+esc(t.nombre)+"</b><span>Libro de mantenimiento digital</span></div><main>";
+  var h="<div class='top'>"+(t.logo?"<img src='"+esc(t.logo)+"' alt='' data-recortar>":"")+"<b>"+esc(t.nombre)+"</b><span>Libro de mantenimiento digital</span></div><main>";
   h+="<div class='veh'><h1>"+esc(titulo)+"</h1><div class='muted'>"+esc([v.nombre&&v.marca&&v.nombre.toLowerCase()!==[v.marca,v.modelo].filter(Boolean).join(" ").toLowerCase()?[v.marca,v.modelo].filter(Boolean).join(" "):"",v.anio,v.color].filter(Boolean).join(" · "))+"</div>"+(v.patente?"<div class='plate'><span>"+esc(v.patente)+"</span></div>":"")+"</div>"+"%%NAV%%";
   var secciones=[];
   // próximos
@@ -167,13 +169,13 @@ function detalle(x){
   if(!mants.length&&!hechas.length)h+="<div class='card'><p class='muted' style='margin:0'>Todavía no hay services registrados para este vehículo.</p></div>";
   // contacto
   var c=[];
-  if(t.telefono)c.push("📞 <a href='tel:"+esc(String(t.telefono).replace(/[^0-9+]/g,""))+"'>"+esc(t.telefono)+"</a>");
+  telefonosDe(t.telefono).forEach(function(n){c.push("📱 <a href='tel:"+esc(n.replace(/[^0-9+]/g,""))+"'>"+esc(n)+"</a>")});
   if(t.direccion)c.push("📍 "+esc(t.direccion)+(t.maps_url?" · <a href='"+esc(t.maps_url)+"' target='_blank' rel='noopener'>Cómo llegar</a>":""));
-  if(t.instagram)c.push("📷 <a href='https://instagram.com/"+esc(String(t.instagram).replace(/^@/,""))+"' target='_blank' rel='noopener'>@"+esc(String(t.instagram).replace(/^@/,""))+"</a>");
+  if(instagramDe(t.instagram))c.push("📷 <a href='https://instagram.com/"+esc(instagramDe(t.instagram))+"' target='_blank' rel='noopener'>@"+esc(instagramDe(t.instagram))+"</a>");
   if(c.length)h+="<div class='card contacto'><h2>"+esc(t.nombre)+"</h2>"+c.join("<br>")+"</div>";
   h+="<p class='pie'>Libro de mantenimiento digital · Torque &amp; Orden</p></main>";
   h=h.replace("%%NAV%%",secciones.length>2?"<nav class='idx'>"+secciones.map(function(s){return "<a href='#"+s[0]+"'>"+s[1]+"</a>"}).join("")+"</nav>":"");
-  M.innerHTML=h;
+  M.innerHTML=h;recortarImagenes(M);
 })();
 </script>
 </body>
