@@ -159,8 +159,10 @@ function filtrarLista(txt,extra){
   var nr=document.getElementById("sinres");if(nr)nr.classList.toggle("hide",vis>0||!items.length);
 }
 function say(id,msg,err){var s=document.getElementById(id);if(!s)return;s.className="status"+(err?" err":"");s.textContent=msg;s.classList.remove("hide")}
-function medidorLabel(){return S.taller&&S.taller.rubro==="motos"?"Kilómetros":"Horas de motor"}
-function equipoLabel(){return S.taller&&S.taller.rubro==="motos"?"Moto":"Embarcación"}
+function rubroTaller(){return S.taller&&S.taller.rubro||"nautica"}
+function medidorLabel(){return rubroTaller()==="nautica"?"Horas de motor":"Kilómetros"}
+function equipoLabel(){var r=rubroTaller();return r==="motos"?"Moto":r==="autos"?"Auto":"Embarcación"}
+function equipoFem(){return rubroTaller()!=="autos"}
 
 /* ---------------- arranque y sesión ---------------- */
 var yaEntro=false;
@@ -356,7 +358,7 @@ async function renderClientes(){
 }
 function eliminarEquipo(id){
   var b=m.querySelector("[data-del-equipo='"+id+"']"),el=b?b.parentNode.parentNode:null;
-  borrarConDeshacer(equipoLabel()+" eliminada",el,function(){return sb.from("equipos").delete().eq("id",id)},renderClientes);
+  borrarConDeshacer(equipoLabel()+(equipoFem()?" eliminada":" eliminado"),el,function(){return sb.from("equipos").delete().eq("id",id)},renderClientes);
 }
 function eliminarMotor(id){
   var b=m.querySelector("[data-del-motor='"+id+"']"),el=b?b.closest(".lr"):null;
@@ -1487,7 +1489,7 @@ async function invitarEmpleado(){
 /* ---------------- patente y ficha del vehículo ---------------- */
 function plateHtml(p,size){return "<span class='plate "+(size||"")+"'><span>"+esc(String(p).toUpperCase())+"</span></span>"}
 function normPatente(p){return String(p||"").toUpperCase().replace(/[^A-Z0-9]/g,"")}
-function patenteLabel(){return S.taller&&S.taller.rubro==="motos"?"Patente":"Matrícula"}
+function patenteLabel(){return rubroTaller()==="nautica"?"Matrícula":"Patente"}
 function renderPatente(){
   m.innerHTML="<h1>Buscar por "+patenteLabel().toLowerCase()+"</h1><div class='card'>"+
    (esPago()?"<button class='btn' id='patFoto' style='width:100%'>"+ic("camera")+" Sacar foto a la "+patenteLabel().toLowerCase()+"</button>":
@@ -1547,7 +1549,7 @@ async function renderFicha(){
   h+="<div class='card'><h2>Motores</h2>"+((e.motores||[]).map(function(mo){return "<div class='lr' style='margin-top:6px'><span>"+esc([mo.marca,mo.modelo].filter(Boolean).join(" ")||"Motor")+"<br><span class='muted'>"+medidorLabel().toLowerCase()+": "+esc(mo.medidor||0)+"</span></span><button class='btn o' data-qr='"+mo.qr_token+"' style='padding:4px 10px;min-height:0'>Ver QR</button></div>"}).join("")||"<span class='muted'>Sin motor cargado.</span>")+"</div>";
   if(e.notas)h+="<div class='card'><h2>Notas</h2><p style='margin:0;white-space:pre-wrap'>"+esc(e.notas)+"</p></div>";
   h+="<div class='card'><h2>Historial ("+ords.length+")</h2>"+(ords.length?ords.map(function(x){var cls=x.estado==="Listo"||x.estado==="Entregado"?"g":x.estado==="En reparación"?"w":"";
-    return "<button class='item' data-oid='"+x.id+"' style='border-top:1px solid var(--line);padding:10px 0'><span><b>OT "+String(x.numero).padStart(6,"0")+"</b> · "+new Date(x.creado).toLocaleDateString("es-AR")+"<br><span class='muted'>"+esc((x.trabajos||x.motivo||"").slice(0,90))+"</span></span><span class='tag "+cls+"'>"+esc(x.estado)+"</span></button>"}).join(""):"<span class='muted'>Todavía no hay órdenes para este "+equipoLabel().toLowerCase()+".</span>")+"</div>";
+    return "<button class='item' data-oid='"+x.id+"' style='border-top:1px solid var(--line);padding:10px 0'><span><b>OT "+String(x.numero).padStart(6,"0")+"</b> · "+new Date(x.creado).toLocaleDateString("es-AR")+"<br><span class='muted'>"+esc((x.trabajos||x.motivo||"").slice(0,90))+"</span></span><span class='tag "+cls+"'>"+esc(x.estado)+"</span></button>"}).join(""):"<span class='muted'>Todavía no hay órdenes para "+(equipoFem()?"esta ":"este ")+equipoLabel().toLowerCase()+".</span>")+"</div>";
   h+="<div class='btns'><button class='btn' id='fNueva'>Nueva orden</button><button class='btn o' id='fPat'>"+ic("pencil")+" "+patenteLabel()+"</button><button class='btn o' id='back'>Volver</button></div>";
   m.innerHTML=h;
   m.querySelectorAll("[data-qr]").forEach(function(b){b.onclick=function(){verQR(b.dataset.qr);window.scrollTo(0,0)}});
