@@ -152,6 +152,7 @@ table.t{width:100%;border-collapse:collapse;font-size:.9rem}table.t th,table.t t
 <script src="js/mantenimiento.js"></script>
 <script src="js/ordenes.js"></script>
 <script src="js/neumaticos.js"></script>
+<script src="js/cajas.js"></script>
 <script>
 var CFG=window.SCOTTO_CONFIG;
 var sb=window.supabase.createClient(CFG.SUPABASE_URL,CFG.SUPABASE_ANON_KEY);
@@ -1207,47 +1208,9 @@ async function ajustarStock(id,delta){
   it.cantidad=nueva;pintarStock();
 }
 
-/* ---------------- caja ---------------- */
-async function renderCaja(){
-  m.innerHTML="<h1>Caja</h1><div id='box'>"+skel()+"</div>";
-  var r=await sb.from("movimientos_caja").select("*, ordenes(numero)").order("creado",{ascending:false}).limit(60);
-  if(r.error){document.getElementById("box").innerHTML=esc(r.error.message);return}
-  S.movs=r.data||[];
-  pintarCaja();
-}
-function pintarCaja(){
-  var ingresos=S.movs.filter(function(x){return x.tipo==="ingreso"}).reduce(function(s,x){return s+Number(x.monto)},0);
-  var egresos=S.movs.filter(function(x){return x.tipo==="egreso"}).reduce(function(s,x){return s+Number(x.monto)},0);
-  var h="<div class='card'><div class='lr'><span class='muted'>Ingresos</span><b style='color:var(--ok)'>"+money(ingresos)+"</b></div>"+
-   "<div class='lr'><span class='muted'>Egresos</span><b style='color:var(--bad)'>"+money(egresos)+"</b></div>"+
-   "<div class='lr' style='margin-top:8px;font-size:1.2rem;font-weight:700'><span>Balance</span><span>"+money(ingresos-egresos)+"</span></div></div>";
-  h+="<div class='card'><h2>Nuevo movimiento</h2>"+
-   "<label for='mtipo'>Tipo</label><select id='mtipo'><option value='ingreso'>Ingreso</option><option value='egreso'>Egreso</option></select>"+
-   "<label for='mconcepto'>Concepto</label><input id='mconcepto' placeholder='Pago OT 000123, compra de repuestos, etc.'>"+
-   "<label for='mmonto'>Monto</label><input id='mmonto' inputmode='decimal'>"+
-   "<div id='stc' class='status hide'></div>"+
-   "<div class='btns'><button class='btn' id='magregar'>Registrar</button></div></div>";
-  h+=S.movs.map(function(x){
-   return "<div class='card' style='padding:10px 16px'><div class='lr'><span>"+esc(x.concepto)+(x.ordenes?" · OT "+String(x.ordenes.numero).padStart(6,"0"):"")+"<br><span class='muted' style='font-size:.85rem'>"+new Date(x.creado).toLocaleString("es-AR")+"</span></span><span class='lr' style='gap:10px'><b style='color:"+(x.tipo==="ingreso"?"var(--ok)":"var(--bad)")+"'>"+(x.tipo==="ingreso"?"+":"−")+money(x.monto)+"</b><button class='btn o icon del' data-del-mov='"+x.id+"' style='padding:4px 10px;min-height:0' aria-label='Eliminar' title='Eliminar'>"+ic("trash")+"</button></span></div></div>"
-  }).join("")||vacio("wallet","Todavía no hay movimientos","Registrá un ingreso o un egreso con el formulario de arriba.");
-  document.getElementById("box").outerHTML=h;
-  document.getElementById("magregar").onclick=agregarMovimiento;
-  m.querySelectorAll("[data-del-mov]").forEach(function(b){b.onclick=function(){eliminarMovimiento(b.dataset.delMov)}});
-}
-function eliminarMovimiento(id){
-  borrarConDeshacer("Movimiento eliminado",tarjetaDe("[data-del-mov='"+id+"']"),function(){return sb.from("movimientos_caja").delete().eq("id",id)},renderCaja);
-}
-async function agregarMovimiento(){
-  var concepto=document.getElementById("mconcepto").value.trim();
-  var monto=Number(document.getElementById("mmonto").value);
-  if(!concepto||!(monto>0)){say("stc","Completá el concepto y un monto mayor a 0.",true);return}
-  await sb.from("movimientos_caja").insert({taller_id:S.taller.id,tipo:document.getElementById("mtipo").value,concepto:concepto,monto:monto});
-  renderCaja();
-}
-
 /* ---------------- menú Más ---------------- */
 function renderMas(){
-  var items=(esDueno()?[["caja","Caja","wallet"],["reportes","Reportes","chart"],["plan","Mi Plan","crown"],["config","Configuración","sliders"]]:[["config","Configuración","sliders"]]);
+  var items=(esDueno()?[["caja","Cajas","wallet"],["reportes","Reportes","chart"],["plan","Mi Plan","crown"],["config","Configuración","sliders"]]:[["config","Configuración","sliders"]]);
   m.innerHTML="<h1>Más</h1><div style='height:14px'></div>"+items.map(function(x){return "<button class='fila' data-v='"+x[0]+"'>"+ic(x[2])+"<span>"+x[1]+"</span>"+ic("chevron")+"</button>"}).join("")+
    "<button class='fila' data-v='patente'>"+ic("camera")+"<span>Buscar por "+patenteLabel().toLowerCase()+"</span>"+ic("chevron")+"</button>";
   m.querySelectorAll(".fila[data-v]").forEach(function(b){b.onclick=function(){S.vista=b.dataset.v;route();window.scrollTo(0,0)}});
@@ -1269,13 +1232,13 @@ async function renderReportes(){
   document.getElementById("repPer").onchange=function(){S.repPer=this.value;pintarReportes()};
   var res=await Promise.all([
    sb.from("ordenes").select("id,numero,estado,creado,cliente_id,clientes(nombre)"),
-   sb.from("movimientos_caja").select("tipo,monto,creado"),
+   sb.from("movimientos_caja").select("*"),
    sb.from("presupuestos").select("total,aprobado,creado"),
    sb.from("repuestos").select("nombre,cantidad,stock_minimo")
   ]);
   var err=res.filter(function(r){return r.error})[0];
   if(err){document.getElementById("box").innerHTML=esc(err.error.message);return}
-  S.rep={ord:res[0].data||[],caja:res[1].data||[],presu:res[2].data||[],rep:res[3].data||[]};
+  S.rep={ord:res[0].data||[],caja:(res[1].data||[]).map(function(x){return {tipo:x.tipo,monto:x.monto,creado:x.fecha||x.creado}}),presu:res[2].data||[],rep:res[3].data||[]};
   pintarReportes();
 }
 function pintarReportes(){
@@ -1432,8 +1395,9 @@ function nombreArchivo(ext){return "torque-orden_"+norm(S.taller.nombre).replace
 async function exportarJson(){
   say("expSt","Preparando la copia…");
   try{
-   var tablas=["clientes","equipos","motores","ordenes","presupuestos","repuestos","movimientos_caja","fotos"],datos={};
-   for(var i=0;i<tablas.length;i++)datos[tablas[i]]=await traerTodo(tablas[i]);
+   var tablas=["clientes","equipos","motores","ordenes","presupuestos","repuestos","movimientos_caja","fotos","mantenimientos","neumaticos","alineaciones","cajas"],datos={};
+   // las tablas nuevas pueden no existir todavía si falta correr algún SQL
+   for(var i=0;i<tablas.length;i++){try{datos[tablas[i]]=await traerTodo(tablas[i])}catch(e){if(i<8)throw e;datos[tablas[i]]=[]}}
    var total=tablas.reduce(function(s,t){return s+datos[t].length},0);
    var copia={app:"Torque & Orden",version:1,generado:new Date().toISOString(),taller:{id:S.taller.id,nombre:S.taller.nombre,rubro:S.taller.rubro},datos:datos};
    descargarArchivo(nombreArchivo("json"),JSON.stringify(copia,null,1),"application/json");
