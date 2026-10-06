@@ -14,6 +14,7 @@
 - Revisión de diseño y usabilidad (tamaños táctiles, etiquetas, textos, zonas seguras del celular)
 - Menú inferior (Panel, Clientes, Órdenes, Stock, Más), íconos SVG en lugar de emojis, borrar con "Deshacer", pantallas de carga y estados vacíos
 - Presupuesto en formato náutico (repuestos y materiales + mano de obra detallada, observación, materiales a cargo del cliente) en pantalla, WhatsApp y PDF
+- Ficha completa del vehículo (marca, modelo, año, color, motor, cilindrada, combustible, código de motor y caja) y buscador de vehículos por marca, modelo, color, patente o cliente
 
 ## Por hacer
 - **Backup en una base de datos aparte para los talleres del plan pago** (los usuarios a los que se les venda la app): una copia viva de sus datos en un segundo servidor, además de la copia diaria.
