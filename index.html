@@ -1588,9 +1588,10 @@ async function instalarApp(){
   promptInstalar=null;pintarBotonInstalar();
 }
 function cardInstalarHtml(){
-  var h="<div class='card' id='cardInstalar'><h2>Instalar en el celular</h2>";
+  var cel=esCelular();
+  var h="<div class='card' id='cardInstalar'><h2>"+(cel?"Instalar en el celular":"Instalar en la PC")+"</h2>";
   if(esInstalada())h+="<p class='muted'>La app ya está instalada en este dispositivo.</p>";
-  else if(promptInstalar)h+="<p class='muted'>Agregá la app a la pantalla de inicio para abrirla como cualquier otra aplicación, a pantalla completa.</p><div class='btns'><button class='btn' id='instalarCfg'>Instalar app</button></div>";
+  else if(promptInstalar)h+="<p class='muted'>"+(cel?"Agregá la app a la pantalla de inicio para abrirla como cualquier otra aplicación, a pantalla completa.":"Instalala para tener un ícono en el escritorio y en el menú Inicio, y abrirla en su propia ventana como cualquier programa. Igual necesita internet para cargar y guardar los datos.")+"</p><div class='btns'><button class='btn' id='instalarCfg'>Instalar app</button></div>";
   else h+="<p class='muted'>"+instruccionesInstalar()+"</p>";
   return h+"</div>";
 }
@@ -1603,8 +1604,16 @@ function instruccionesInstalar(){
   if(esIOS())return /CriOS|FxiOS|EdgiOS/.test(navigator.userAgent)?
     "En iPhone: tocá el botón <b>Compartir</b> (el cuadrado con la flecha ⬆️, arriba a la derecha) y elegí <b>Agregar a pantalla de inicio</b>. Si no aparece, abrí esta página en <b>Safari</b>.":
     "En iPhone: tocá el botón <b>Compartir</b> (el cuadrado con la flecha ⬆️, abajo en el centro), deslizá y elegí <b>Agregar a pantalla de inicio</b>.";
+  if(!esCelular())return instruccionesInstalarPC();
   if(/SamsungBrowser/.test(navigator.userAgent))return "En Samsung Internet: tocá el menú <b>☰</b> y elegí <b>Agregar página a</b> → <b>Pantalla de inicio</b>. También podés abrirla en <b>Chrome</b> y tocar <b>⋮</b> → <b>Instalar aplicación</b>.";
   return "En Android: tocá el menú <b>⋮</b> (arriba a la derecha) y elegí <b>Instalar aplicación</b> o <b>Agregar a pantalla de inicio</b>. Si no aparece, abrí esta página en <b>Chrome</b>.";
+}
+function instruccionesInstalarPC(){
+  var ua=navigator.userAgent;
+  if(/Edg\//.test(ua))return "En Edge: hacé clic en el menú <b>···</b> (arriba a la derecha) → <b>Aplicaciones</b> → <b>Instalar este sitio como aplicación</b>. Te queda un ícono en el escritorio y en el menú Inicio, y se abre en su propia ventana.";
+  if(/Chrome\//.test(ua)&&!/OPR\//.test(ua))return "En Chrome: hacé clic en el ícono de instalar que aparece a la derecha de la barra de direcciones (una pantalla con una flechita), o en el menú <b>⋮</b> → <b>Transmitir, guardar y compartir</b> → <b>Instalar página como app</b>. Te queda un ícono en el escritorio y en el menú Inicio, y se abre en su propia ventana.";
+  if(/Macintosh/.test(ua)&&/Safari\//.test(ua))return "En Safari (Mac): entrá al menú <b>Archivo</b> → <b>Agregar al Dock</b>. También podés abrir esta página en <b>Chrome</b> o <b>Edge</b> e instalarla desde ahí.";
+  return "Para instalarla en la PC, abrí esta página en <b>Chrome</b> o <b>Edge</b> y buscá la opción <b>Instalar</b> en el menú o en la barra de direcciones.";
 }
 // Aviso abajo en celulares que todavía no tienen la app instalada.
 function pintarAvisoInstalar(){
