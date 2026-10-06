@@ -151,6 +151,7 @@ table.t{width:100%;border-collapse:collapse;font-size:.9rem}table.t th,table.t t
 <script src="js/vehiculos.js"></script>
 <script src="js/mantenimiento.js"></script>
 <script src="js/ordenes.js"></script>
+<script src="js/neumaticos.js"></script>
 <script>
 var CFG=window.SCOTTO_CONFIG;
 var sb=window.supabase.createClient(CFG.SUPABASE_URL,CFG.SUPABASE_ANON_KEY);
@@ -1578,6 +1579,9 @@ async function renderFicha(){
   var o=await sb.from("ordenes").select("id,numero,estado,creado,motivo,trabajos,medidor").eq("equipo_id",e.id).order("creado",{ascending:false});
   var ords=o.data||[],tel=telWa(c.telefono);
   var mr=await sb.from("mantenimientos").select("*").eq("equipo_id",e.id),mants=mr.error?null:(mr.data||[]),kmAct=kmActualDe(ords,mants,e.motores);
+  var neus=null,alis=null;
+  if(usaNeumaticos()){var nr=await Promise.all([sb.from("neumaticos").select("*").eq("equipo_id",e.id).order("fecha",{ascending:false}),sb.from("alineaciones").select("*").eq("equipo_id",e.id).order("fecha",{ascending:false})]);
+   if(!nr[0].error&&!nr[1].error){neus=nr[0].data||[];alis=nr[1].data||[];kmAct=kmActualDe(ords,(mants||[]).concat(neus,alis),e.motores)}}
   var h="<h1>"+esc(vehTitulo(e))+"</h1>"+(vehDetalle(e)?"<p class='muted' style='margin:4px 0 0'>"+esc(vehDetalle(e))+"</p>":"")+(e.matricula_patente?"<p style='margin:10px 0 14px'>"+plateHtml(e.matricula_patente,"lg")+"</p>":"<div style='height:12px'></div>");
   if(e.qr_token||mants)h+="<div class='btns' style='margin:0 0 12px'>"+(mants?"<button class='btn' id='fMant2'>"+ic("plus")+" Cargar service</button>":"")+(e.qr_token?"<button class='btn o' id='fQR'>"+ic("qr")+" QR y ficha digital</button>":"")+"</div>";
   if(mants)h+=fichaProximosHtml(mants,kmAct);
@@ -1586,6 +1590,7 @@ async function renderFicha(){
   h+=fichaDatosHtml(e);
   if(!usaMotorEnFicha()||(e.motores||[]).length)h+="<div class='card'><h2>Motores</h2>"+((e.motores||[]).map(function(mo){return "<div class='lr' style='margin-top:6px'><span>"+esc([mo.marca,mo.modelo].filter(Boolean).join(" ")||"Motor")+"<br><span class='muted'>"+medidorLabel().toLowerCase()+": "+esc(mo.medidor||0)+"</span></span><button class='btn o' data-qr='"+mo.qr_token+"' style='padding:4px 10px;min-height:0'>Ver QR</button></div>"}).join("")||"<span class='muted'>Sin motor cargado.</span>")+"</div>";
   if(mants)h+=fichaMantHtml(mants);
+  if(neus)h+=fichaNeumaticosHtml(neus,alis);
   if(e.notas)h+="<div class='card'><h2>Notas</h2><p style='margin:0;white-space:pre-wrap'>"+esc(e.notas)+"</p></div>";
   h+="<div class='card'><h2>Órdenes de trabajo ("+ords.length+")</h2>"+(ords.length?ords.map(function(x){var cls=x.estado==="Listo"||x.estado==="Entregado"?"g":x.estado==="En reparación"?"w":"";
     return "<button class='item' data-oid='"+x.id+"' style='border-top:1px solid var(--line);padding:10px 0'><span><b>OT "+String(x.numero).padStart(6,"0")+"</b> · "+new Date(x.creado).toLocaleDateString("es-AR")+(x.medidor?" · "+kmTxt(x.medidor):"")+"<br><span class='muted'>"+esc((x.trabajos||x.motivo||"").slice(0,90))+"</span></span><span class='tag "+cls+"'>"+esc(x.estado)+"</span></button>"}).join(""):"<span class='muted'>Todavía no hay órdenes para "+(equipoFem()?"esta ":"este ")+equipoLabel().toLowerCase()+".</span>")+"</div>";
@@ -1599,6 +1604,7 @@ async function renderFicha(){
   document.getElementById("fPat").onclick=async function(){if(await editarPatente(e.id,e.matricula_patente))renderFicha()};
   document.getElementById("fEditar").onclick=function(){abrirVehiculoForm(e.id,e.cliente_id,"ficha")};
   conectarFichaMant(e,kmAct);
+  if(neus)conectarFichaNeu(e,kmAct,neus);
   var fm2=document.getElementById("fMant2");if(fm2)fm2.onclick=function(){abrirMantForm({equipo_id:e.id,km:kmAct||null},e)};
   var fq=document.getElementById("fQR");if(fq)fq.onclick=function(){verQRVehiculo(e,tel)};
   document.getElementById("back").onclick=function(){S.vista=S.volverFicha||"clientes";route()};
