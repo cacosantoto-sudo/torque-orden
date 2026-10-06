@@ -136,7 +136,6 @@ input[type=search]{padding-left:40px;background-image:url("data:image/svg+xml,%3
 .tabs button{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;min-height:44px;border:0;border-radius:9px;background:none;color:var(--mute);font-family:var(--f-head);font-weight:700;font-size:1rem;letter-spacing:.05em;text-transform:uppercase}
 .tabs button[aria-selected="true"]{background:var(--ac);color:var(--on-ac)}
 .g2{display:grid;grid-template-columns:1fr 1fr;gap:0 10px;align-items:end}.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:0 10px;align-items:end}
-@media (max-width:420px){.g3{grid-template-columns:1fr 1fr}}
 table.t{width:100%;border-collapse:collapse;font-size:.9rem}table.t th,table.t td{padding:6px 4px;border-top:1px solid var(--line);text-align:right}table.t td{font-family:var(--f-mono);font-size:.82rem}table.t th:first-child,table.t td:first-child{text-align:left}
 </style>
 </head>
@@ -151,6 +150,7 @@ table.t{width:100%;border-collapse:collapse;font-size:.9rem}table.t th,table.t t
 <script src="config.js"></script>
 <script src="js/vehiculos.js"></script>
 <script src="js/mantenimiento.js"></script>
+<script src="js/ordenes.js"></script>
 <script>
 var CFG=window.SCOTTO_CONFIG;
 var sb=window.supabase.createClient(CFG.SUPABASE_URL,CFG.SUPABASE_ANON_KEY);
@@ -283,12 +283,14 @@ async function renderPanel(){
   h+=r.data.length?r.data.map(function(o){var cls=o.estado==="Listo"||o.estado==="Entregado"?"g":o.estado==="En reparación"?"w":"";
     return "<div class='lr' style='border-top:1px solid var(--line);padding:8px 0'><span>OT "+String(o.numero).padStart(6,"0")+" · "+esc(o.clientes?o.clientes.nombre:"")+"</span><span class='tag "+cls+"'>"+esc(o.estado)+"</span></div>"}).join(""):"<p class='muted' style='margin:0'>Todavía no hay órdenes. Tocá <b>Nueva orden</b> para cargar la primera.</p>";
   h+="</div><div class='btns'><button class='btn' id='ir'>Nueva orden</button><button class='btn o' id='irVeh'>"+ic("search")+" Buscar "+equipoLabel().toLowerCase()+"</button><button class='btn o' id='irPat'>"+ic("camera")+" Buscar por "+patenteLabel().toLowerCase()+"</button></div>";
+  h+="<div class='card' id='secBox' style='margin-top:16px'><h2>Dónde está cada "+equipoLabel().toLowerCase()+"</h2><span class='muted'>Buscando…</span></div>";
   h+="<div class='card' id='vencBox' style='margin-top:16px'><h2>Services por vencer</h2><span class='muted'>Buscando…</span></div>";
   h+="<div class='card' id='recBox' style='margin-top:16px'><h2>Mantenimientos para recordar</h2><span class='muted'>Buscando…</span></div>";
   document.getElementById("box").outerHTML=h;
   document.getElementById("ir").onclick=function(){S.orden={estado:"Recibido"};S.vista="ordenForm";route()};
   document.getElementById("irPat").onclick=function(){S.vista="patente";route()};
   document.getElementById("irVeh").onclick=function(){S.vista="vehiculos";route()};
+  cargarSectoresPanel();
   cargarServicesPorVencer();
   cargarRecordatorios();
 }
@@ -420,24 +422,31 @@ function tarjetaDe(sel){var el=m.querySelector(sel);return el?el.closest(".card"
 
 /* ---------------- órdenes: lista ---------------- */
 async function renderOrdenes(){
-  m.innerHTML="<h1>Órdenes de trabajo</h1><div id='box'>"+skel()+"</div>";
-  var r=await sb.from("ordenes").select("id,numero,estado,clientes(nombre),equipos(nombre,matricula_patente)").order("creado",{ascending:false});
+  m.innerHTML="<h1>Órdenes de trabajo</h1>"+tabsOrdenes("ordenes")+"<div id='box'>"+skel()+"</div>";
+  conectarTabs();
+  var r=await sb.from("ordenes").select("*,clientes(nombre),equipos(nombre,marca,modelo,color,matricula_patente),presupuestos(total,estado,aprobado)").order("creado",{ascending:false});
+  if(r.error)r=await sb.from("ordenes").select("id,numero,estado,creado,clientes(nombre),equipos(nombre,matricula_patente)").order("creado",{ascending:false});
   if(r.error){document.getElementById("box").innerHTML=esc(r.error.message);return}
   var h=S.talleres&&S.taller?"":"";
   h+="<div class='btns' style='margin-bottom:12px'><button class='btn' id='nueva'>Nueva orden</button></div>";
   h+=buscadorHtml("Buscar por N° de OT, cliente, "+equipoLabel().toLowerCase()+" o "+patenteLabel().toLowerCase(),S.qOrdenes);
-  h+="<select id='festado' aria-label='Filtrar por estado' style='margin-bottom:12px'><option value=''>Todos los estados</option>"+ESTADOS.map(function(e){return "<option"+(e===S.fEstado?" selected":"")+">"+e+"</option>"}).join("")+"</select>";
+  var conSector=(r.data||[]).some(function(o){return "sector" in o});
+  h+="<div style='margin-bottom:12px;display:grid;grid-template-columns:1fr 1fr;gap:8px'><select id='festado' aria-label='Filtrar por estado' style='grid-column:1/-1'><option value=''>Todos los estados</option>"+ESTADOS.map(function(e){return "<option"+(e===S.fEstado?" selected":"")+">"+e+"</option>"}).join("")+"</select>"+
+   (conSector?"<select id='fsector' aria-label='Filtrar por sector'><option value=''>Todos los sectores</option>"+SECTORES.map(function(e){return "<option"+(e===S.fSector?" selected":"")+">"+e+"</option>"}).join("")+"</select>"+
+   "<select id='ffact' aria-label='Filtrar por facturación'><option value=''>Facturado: todos</option><option value='si'"+(S.fFact==="si"?" selected":"")+">Facturado: sí</option><option value='no'"+(S.fFact==="no"?" selected":"")+">Facturado: no</option></select>":"")+"</div>";
   h+=(r.data||[]).map(function(o){var cls=o.estado==="Listo"||o.estado==="Entregado"?"g":o.estado==="En reparación"?"w":"";
    var post=(o.estado==="Listo"||o.estado==="Entregado")?"<button class='btn o' data-post='"+o.id+"' style='padding:6px 12px;min-height:0;margin-top:8px'>"+ic("image")+" Post para Instagram</button>":"";
    var presu="<button class='btn o' data-presu='"+o.id+"' style='padding:6px 12px;min-height:0;margin-top:8px;margin-left:8px'>"+ic("receipt")+" Presupuesto</button>";
    var del="<button class='btn o icon del' data-del-orden='"+o.id+"' style='padding:6px 12px;min-height:0;margin-top:8px;margin-left:8px' aria-label='Eliminar' title='Eliminar'>"+ic("trash")+"</button>";
    var q=norm(["OT "+String(o.numero).padStart(6,"0"),o.numero,o.clientes?o.clientes.nombre:"",o.equipos?o.equipos.nombre:"",o.equipos?o.equipos.matricula_patente:"",o.equipos?normPatente(o.equipos.matricula_patente):""].join(" "));
-   return "<div class='card' data-q=\""+esc(q)+"\" data-estado=\""+esc(o.estado)+"\"><button class='item' data-id='"+o.id+"'><span><b>OT "+String(o.numero).padStart(6,"0")+"</b> · "+esc(o.clientes?o.clientes.nombre:"Sin cliente")+"<br><span class='muted'>"+esc(o.equipos?o.equipos.nombre:"")+"</span></span><span class='tag "+cls+"'>"+esc(o.estado)+"</span></button>"+post+presu+del+"</div>"}).join("")||vacio("clipboard","Todavía no hay órdenes","Tocá Nueva orden para cargar la primera.");
+   var pr=presuDe(o),extra=[sectorTag(o.sector),facturadoTag(o),pr?"<span class='tag "+clsEstadoPresu(estadoPresu(pr))+"'>Presup. "+esc(estadoPresu(pr))+" · "+plata(pr.total)+"</span>":""].filter(Boolean).join(" ");
+   return "<div class='card' data-q=\""+esc(q)+"\" data-estado=\""+esc(o.estado)+"\" data-sector=\""+esc(o.sector||"")+"\" data-fact='"+(o.facturado?"si":"no")+"'><button class='item' data-id='"+o.id+"'><span><b>OT "+String(o.numero).padStart(6,"0")+"</b> · "+esc(o.clientes?o.clientes.nombre:"Sin cliente")+"<br><span class='muted'>"+esc(o.equipos?vehTitulo(o.equipos)+(o.equipos.matricula_patente?" · "+o.equipos.matricula_patente:""):"")+"</span></span><span class='tag "+cls+"'>"+esc(o.estado)+"</span></button>"+(extra?"<div style='display:flex;gap:6px;flex-wrap:wrap;margin-top:8px'>"+extra+"</div>":"")+post+presu+del+"</div>"}).join("")||vacio("clipboard","Todavía no hay órdenes","Tocá Nueva orden para cargar la primera.");
   h+="<p id='sinres' class='muted hide'>No hay órdenes que coincidan con la búsqueda.</p>";
   document.getElementById("box").outerHTML=h;
-  var bo=document.getElementById("buscar"),fe=document.getElementById("festado");
-  function aplicar(){S.qOrdenes=bo.value;S.fEstado=fe.value;filtrarLista(bo.value,fe.value?function(el){return el.dataset.estado===fe.value}:null)}
-  bo.oninput=aplicar;fe.onchange=aplicar;aplicar();
+  var bo=document.getElementById("buscar"),fe=document.getElementById("festado"),fs=document.getElementById("fsector"),ff=document.getElementById("ffact");
+  function aplicar(){S.qOrdenes=bo.value;S.fEstado=fe.value;S.fSector=fs?fs.value:"";S.fFact=ff?ff.value:"";
+   filtrarLista(bo.value,function(el){return (!S.fEstado||el.dataset.estado===S.fEstado)&&(!S.fSector||el.dataset.sector===S.fSector)&&(!S.fFact||el.dataset.fact===S.fFact)})}
+  bo.oninput=aplicar;fe.onchange=aplicar;if(fs)fs.onchange=aplicar;if(ff)ff.onchange=aplicar;aplicar();
   document.getElementById("nueva").onclick=function(){S.orden={estado:"Recibido"};S.vista="ordenForm";route()};
   m.querySelectorAll("[data-id]").forEach(function(b){b.onclick=async function(){
    var r=await sb.from("ordenes").select("*").eq("id",b.dataset.id).single();
@@ -447,7 +456,7 @@ async function renderOrdenes(){
    var r=await sb.from("ordenes").select("*, equipos(nombre), motores(marca,modelo)").eq("id",b.dataset.post).single();
    if(r.error){alert(r.error.message);return}
    S.orden=r.data;S.vista="postForm";route()}});
-  m.querySelectorAll("[data-presu]").forEach(function(b){b.onclick=function(){abrirPresupuesto(b.dataset.presu)}});
+  m.querySelectorAll("[data-presu]").forEach(function(b){b.onclick=function(){S.volverPresu="ordenes";abrirPresupuesto(b.dataset.presu)}});
   m.querySelectorAll("[data-del-orden]").forEach(function(b){b.onclick=function(){eliminarOrden(b.dataset.delOrden)}});
 }
 function eliminarOrden(id){
@@ -481,6 +490,7 @@ async function renderOrdenForm(){
    h+="<div class='lr'><label for='f_"+c[0]+"'>"+c[1]+"</label><button class='mic' data-mic='"+c[0]+"' aria-label='Dictar este campo'>"+ic("mic")+"</button></div><textarea id='f_"+c[0]+"'>"+esc(o[c[0]])+"</textarea>"});
   h+="<label for='f_medidor'>"+medidorLabel()+"</label><input id='f_medidor' inputmode='decimal' value='"+esc(o.medidor)+"'>";
   h+="<label for='f_estado'>Estado</label><select id='f_estado'>"+ESTADOS.map(function(e){return "<option"+(e===o.estado?" selected":"")+">"+e+"</option>"}).join("")+"</select></div>";
+  h+=ordenExtrasHtml(o);
   if(o.id)h+="<div class='card'><h2>Firma de retiro</h2><div id='firmaBox'><div class='sk' style='height:60px'></div></div></div>";
   h+="<div class='card'><h2>Fotos</h2><div id='ph'>"+(o.id?"<span class='muted'>Cargando fotos…</span>":"<span class='muted'>Se guardan al guardar la orden.</span>")+"</div></div>";
   h+="<div class='btns'><button class='btn' id='save'>Guardar orden</button>"+(o.id?"<button class='btn o' id='presu'>"+ic("receipt")+" Presupuesto</button>":"")+(o.id&&o.equipo_id?"<button class='btn o' id='mantOT'>"+ic("plus")+" Cargar service al historial</button>":"")+"<button class='btn o' id='back'>Volver</button>"+(o.id?"<button class='btn d' id='delOrden'>Eliminar orden</button>":"")+"</div>";
@@ -500,7 +510,8 @@ async function renderOrdenForm(){
   var mo=document.getElementById("mantOT");if(mo)mo.onclick=function(){
    var eq=null;formClientes.forEach(function(c){(c.equipos||[]).forEach(function(x){if(x.id===o.equipo_id)eq=x})});
    abrirMantForm({equipo_id:o.equipo_id,orden_id:o.id,km:Number(document.getElementById("f_medidor").value)||o.medidor||null},eq||{id:o.equipo_id},"ordenForm")};
-  if(o.id){cargarFotos(o.id);document.getElementById("presu").onclick=function(){abrirPresupuesto(o.id)};document.getElementById("delOrden").onclick=function(){eliminarOrdenYVolver(o.id)}}
+  pintarFactura(o);
+  if(o.id){cargarFotos(o.id);document.getElementById("presu").onclick=function(){S.volverPresu="ordenForm";abrirPresupuesto(o.id)};document.getElementById("delOrden").onclick=function(){eliminarOrdenYVolver(o.id)}}
 }
 var formClientes=[];
 function equiposDelForm(){var c=formClientes.find(function(x){return x.id===document.getElementById("f_cliente").value});return c?c.equipos||[]:[]}
@@ -605,11 +616,13 @@ async function guardarOrden(){
    medidor:Number(document.getElementById("f_medidor").value)||null,
    estado:document.getElementById("f_estado").value
   };
+  Object.assign(data,datosExtrasOrden());
   var ordenId=o.id,res;
   if(ordenId)res=await sb.from("ordenes").update(data).eq("id",ordenId).select().single();
   else res=await sb.from("ordenes").insert(data).select().single();
   if(res.error){say("st",res.error.message,true);return}
   ordenId=res.data.id;
+  if(data.estado!==o.estado_guardado)await marcarPresuRealizado(ordenId,data.estado);
   if(data.motor_id&&data.medidor){
    var mot=null;formClientes.forEach(function(c){(c.equipos||[]).forEach(function(e){(e.motores||[]).forEach(function(mo){if(mo.id===data.motor_id)mot=mo})})});
    if(mot&&data.medidor>(Number(mot.medidor)||0))await sb.from("motores").update({medidor:data.medidor}).eq("id",data.motor_id);
@@ -791,6 +804,7 @@ function calcTotal(){
 function cargarPresu(data,nuevo){
   var items=(data&&data.items)||[],meta=items.filter(function(it){return it&&it.tipo==="meta"})[0];
   S.presu=data||{total:0,aprobado:false};
+  S.presu.estadoGuardado=data?estadoPresu(data):null;
   S.presu.items=items.filter(function(it){return it&&it.tipo!=="meta"});
   if(!meta){var o=S.orden||{};
    meta=nuevo&&S.taller.rubro==="nautica"
@@ -808,7 +822,7 @@ async function renderPresuForm(){
   pintarPresu();
 }
 function tarjetaItem(it,i){
-  if(tipoItem(it)==="mano")return "<div class='card' style='padding:10px;margin-bottom:8px'>"+
+  if(tipoItem(it)==="mano"&&esNautico())return "<div class='card' style='padding:10px;margin-bottom:8px'>"+
     "<div class='lr' style='gap:8px;align-items:flex-end'>"+
      "<div style='flex:2'><label for='d_"+i+"'>Concepto</label><input id='d_"+i+"' data-f='descripcion' data-i='"+i+"' placeholder='Ej.: Service de 100 horas' value=\""+esc(it.descripcion)+"\"></div>"+
      "<div style='flex:1'><label for='p_"+i+"'>Importe</label><input id='p_"+i+"' data-f='precio' data-i='"+i+"' inputmode='decimal' value='"+esc(it.precio)+"'></div>"+
@@ -817,6 +831,7 @@ function tarjetaItem(it,i){
     "<div class='lr' style='margin-top:8px'><span></span><button class='btn d' data-del='"+i+"' style='padding:6px 12px;min-height:0'>Quitar</button></div>"+
    "</div>";
   return "<div class='card' style='padding:10px;margin-bottom:8px'>"+
+      (esNautico()?"":"<label for='t_"+i+"'>Tipo</label><select id='t_"+i+"' data-f='tipo' data-i='"+i+"'><option value=''"+(tipoItem(it)==="mano"?"":" selected")+">Repuesto / material</option><option value='mano'"+(tipoItem(it)==="mano"?" selected":"")+">Mano de obra</option></select>")+
       "<label for='d_"+i+"'>"+(esNautico()?"Repuesto o material":"Descripción")+"</label><input id='d_"+i+"' data-f='descripcion' data-i='"+i+"' value=\""+esc(it.descripcion)+"\">"+
       "<div class='lr' style='gap:8px;margin-top:8px;align-items:flex-end'>"+
        "<div style='flex:1'><label for='c_"+i+"'>Cantidad</label><input id='c_"+i+"' data-f='cantidad' data-i='"+i+"' inputmode='decimal' value='"+esc(it.cantidad)+"'></div>"+
@@ -826,7 +841,8 @@ function tarjetaItem(it,i){
     "</div>";
 }
 function pintarPresu(){
-  var box=document.getElementById("box"),M=S.presu.meta,h="";
+  var box=document.getElementById("box"),M=S.presu.meta,h="",est=estadoPresu(S.presu);
+  h+="<div class='card'><label for='presuEstado' style='margin-top:0'>Estado del presupuesto</label><select id='presuEstado'>"+ESTADOS_PRESU.map(function(e){return "<option"+(e===est?" selected":"")+">"+e+"</option>"}).join("")+"</select></div>";
   function lista(tipo){return S.presu.items.map(function(it,i){return tipoItem(it)===tipo||!esNautico()?tarjetaItem(it,i):""}).join("")}
   h+="<div class='card'><label for='formato'>Formato</label><select id='formato'>"+
     "<option value='simple'"+(esNautico()?"":" selected")+">Simple (lista de ítems)</option>"+
@@ -847,7 +863,8 @@ function pintarPresu(){
   }else{
    h+="<div class='card'><h2>Ítems</h2><div id='items'>"+lista("repuesto")+"</div>";
    h+="<button class='btn o' id='add'>+ Agregar ítem</button>";
-   h+="<div class='lr' style='margin-top:16px;font-size:1.2rem;font-weight:700'><span>Total</span><span id='tot'>"+money(calcTotal())+"</span></div></div>";
+   h+="<div class='lr' style='margin-top:16px'><span class='muted'>Repuestos</span><span id='subRep'>"+money(subtotalDe("repuesto"))+"</span></div><div class='lr'><span class='muted'>Mano de obra</span><span id='subMano'>"+money(subtotalDe("mano"))+"</span></div>";
+   h+="<div class='lr' style='margin-top:8px;font-size:1.2rem;font-weight:700'><span>Total</span><span id='tot'>"+money(calcTotal())+"</span></div></div>";
   }
   h+="<div id='st' class='status hide'></div>";
   h+="<div class='btns'>"+
@@ -856,7 +873,7 @@ function pintarPresu(){
     "<button class='btn o' id='wa'>"+ic("message")+" Enviar por WhatsApp</button>"+
     "<button class='btn o' id='copiarMsg'>Copiar mensaje</button>"+
     (S.taller.alias_pago?"<button class='btn o' id='copiarAlias'>Copiar alias</button>":"")+
-    (S.presu.aprobado?"<span class='tag g' style='align-self:center'>Aprobado</span>":"<button class='btn' id='aprobar' style='background:var(--ok)'>Aprobar presupuesto</button>")+
+    (est==="Pendiente"?"<button class='btn' id='aprobar' style='background:var(--ok)'>Aprobar presupuesto</button>":"<span class='tag "+clsEstadoPresu(est)+"' style='align-self:center'>"+esc(est)+"</span>")+
     "<button class='btn o' id='back'>Volver</button>"+
     (S.presu.id?"<button class='btn d' id='delPresu'>Eliminar presupuesto</button>":"")+
   "</div>";
@@ -868,6 +885,7 @@ function pintarPresu(){
   box.querySelectorAll("[data-f]").forEach(function(el){el.oninput=function(){
     var i=Number(el.dataset.i),f=el.dataset.f;
     S.presu.items[i][f]=el.value;
+    if(f==="tipo"&&!el.value)delete S.presu.items[i].tipo;
     var subEl=document.getElementById("sub_"+i);if(subEl)subEl.textContent=money(subItem(S.presu.items[i]));
     refrescarTotales();
   }});
@@ -886,7 +904,8 @@ function pintarPresu(){
   document.getElementById("wa").onclick=enviarWhatsApp;
   document.getElementById("copiarMsg").onclick=copiarMensaje;
   var ca=document.getElementById("copiarAlias");if(ca)ca.onclick=function(){copiarTexto(S.taller.alias_pago,"Alias copiado: "+S.taller.alias_pago)};
-  document.getElementById("back").onclick=function(){S.vista="ordenes";route()};
+  document.getElementById("back").onclick=function(){S.vista=S.volverPresu||"ordenes";route()};
+  document.getElementById("presuEstado").onchange=function(){S.presu.estado=this.value};
   var apBtn=document.getElementById("aprobar");if(apBtn)apBtn.onclick=aprobarPresupuesto;
   var delBtn=document.getElementById("delPresu");if(delBtn)delBtn.onclick=eliminarPresupuesto;
 }
@@ -902,9 +921,13 @@ async function eliminarPresupuesto(){
 async function guardarPresupuesto(){
   say("st","Guardando…");
   var meta=Object.assign({tipo:"meta"},S.presu.meta);
-  var data={taller_id:S.taller.id,orden_id:S.orden.id,items:[meta].concat(S.presu.items),total:calcTotal()};
+  var est=estadoPresu(S.presu),antes=S.presu.estadoGuardado;
+  var data={taller_id:S.taller.id,orden_id:S.orden.id,items:[meta].concat(S.presu.items),total:calcTotal(),estado:est,aprobado:["Aprobado","Parcialmente aprobado","Realizado"].indexOf(est)>=0};
   var r=await sb.from("presupuestos").upsert(data,{onConflict:"orden_id"}).select().single();
+  if(r.error&&/estado/.test(r.error.message)){delete data.estado;r=await sb.from("presupuestos").upsert(data,{onConflict:"orden_id"}).select().single()}
   if(r.error){say("st",r.error.message,true);return null}
+  if(est!==antes&&(est==="Aprobado"||est==="Parcialmente aprobado")&&["Recibido","Diagnóstico","Presupuesto"].indexOf(S.orden.estado)>=0){
+   await sb.from("ordenes").update({estado:"Aprobado"}).eq("id",S.orden.id);S.orden.estado="Aprobado"}
   cargarPresu(r.data,false);say("st","Presupuesto guardado.");return r.data;
 }
 // Montos sin ",00" cuando son enteros
@@ -1121,13 +1144,10 @@ function enviarWhatsApp(){
   window.open(url,"_blank");
 }
 async function aprobarPresupuesto(){
+  S.presu.estado="Aprobado";
   var saved=await guardarPresupuesto();
   if(!saved)return;
-  var r=await sb.from("presupuestos").update({aprobado:true}).eq("id",saved.id).select().single();
-  if(r.error){say("st",r.error.message,true);return}
-  cargarPresu(r.data,false);
-  await sb.from("ordenes").update({estado:"Aprobado"}).eq("id",S.orden.id);
-  S.orden.estado="Aprobado";
+  if(S.orden.estado!=="Aprobado"&&["Recibido","Diagnóstico","Presupuesto"].indexOf(S.orden.estado)>=0){await sb.from("ordenes").update({estado:"Aprobado"}).eq("id",S.orden.id);S.orden.estado="Aprobado"}
   pintarPresu();
   say("st","Presupuesto aprobado. La orden pasó a estado Aprobado.");
 }
