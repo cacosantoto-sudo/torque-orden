@@ -2,8 +2,8 @@
 // Las páginas y config.js van siempre primero a la red (para tener la última versión)
 // y solo si no hay conexión se usa la copia guardada.
 // Los datos (Supabase) y las funciones de /api nunca se guardan.
-var CACHE = "taller-v10";
-var BASICOS = ["./", "./index.html", "./config.js", "./manifest.json", "./js/vehiculos.js", "./icons/icon-192.png", "./icons/icon-512.png"];
+var CACHE = "taller-v11";
+var BASICOS = ["./", "./index.html", "./config.js", "./manifest.json", "./js/vehiculos.js", "./js/mantenimiento.js", "./icons/icon-192.png", "./icons/icon-512.png"];
 
 self.addEventListener("install", function (e) {
   e.waitUntil(caches.open(CACHE).then(function (c) { return c.addAll(BASICOS); }).then(function () { return self.skipWaiting(); }));

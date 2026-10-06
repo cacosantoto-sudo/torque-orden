@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Etiqueta de service</title>
+<meta name="robots" content="noindex">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@500;700&family=Barlow+Condensed:wght@700;800&family=JetBrains+Mono:wght@600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#1a1a1a;--ink:#f3f3f1;--mute:#a3a39d;--ac:#ff6a13}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.4 "Barlow",system-ui,sans-serif;padding:24px 16px 40px;display:flex;flex-direction:column;align-items:center}
+.etq{width:6cm;height:9cm;justify-content:space-between;background:#fff;color:#111;border-radius:4mm;padding:4mm 4mm 3.5mm;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.5)}
+.etq .logo{max-width:4.4cm;max-height:1.6cm;object-fit:contain}
+.etq .tn{font:800 .5cm/1.05 "Barlow Condensed",sans-serif;text-transform:uppercase;letter-spacing:.02em}
+.etq .qr{width:3.9cm;height:3.9cm;margin:2.5mm 0 2mm;line-height:0}
+.etq .qr svg{width:100%;height:100%}
+.etq .px{border-top:.6mm solid #111;width:100%;padding-top:2mm}
+.etq .px small{display:block;font:700 .27cm/1 "Barlow",sans-serif;letter-spacing:.14em;text-transform:uppercase;color:#555}
+.etq .px b{display:block;font:800 .62cm/1.05 "Barlow Condensed",sans-serif;letter-spacing:.02em;margin-top:1mm}
+.etq .px span{display:block;font:700 .34cm/1.2 "Barlow",sans-serif;margin-top:.5mm}
+.etq .veh{font:600 .24cm/1.2 "JetBrains Mono",monospace;color:#444;margin-top:2mm;letter-spacing:.04em}
+.etq .esc{font:500 .22cm/1.2 "Barlow",sans-serif;color:#666;margin-top:1mm}
+.ops{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:20px}
+.btn{background:var(--ac);color:#0a0a0a;border:0;border-radius:10px;padding:12px 18px;min-height:48px;font:700 1.05rem "Barlow Condensed",sans-serif;letter-spacing:.05em;text-transform:uppercase;cursor:pointer}
+.btn.o{background:transparent;color:var(--ink);border:1px solid #444}
+.hint{color:var(--mute);font-size:.9rem;max-width:340px;text-align:center;margin-top:12px}
+@media print{
+  body{background:#fff;padding:0}
+  .ops,.hint{display:none}
+  .etq{box-shadow:none;border:.3mm dashed #999}
+  @page{margin:1cm}
+}
+</style>
+</head>
+<body>
+<div id="m">Cargando…</div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+<script src="config.js"></script>
+<script>
+var CFG=window.SCOTTO_CONFIG;
+var sb=window.supabase.createClient(CFG.SUPABASE_URL,CFG.SUPABASE_ANON_KEY);
+function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
+function fecha(f){return f?new Date(String(f).slice(0,10)+"T12:00:00").toLocaleDateString("es-AR",{day:"2-digit",month:"2-digit",year:"numeric"}):""}
+// El próximo service que se muestra: el de aceite; si no hay, el más cercano de los otros
+function proximo(mants){
+  var ult={};(mants||[]).forEach(function(x){if(x.tipo!=="otro"&&!ult[x.tipo]&&(x.proximo_km||x.proximo_fecha))ult[x.tipo]=x});
+  if(ult.aceite)return {p:ult.aceite,titulo:"Próximo service"};
+  var nombres={caja:"Próx. service de caja",distribucion:"Próx. distribución"};
+  var otros=Object.keys(ult).sort(function(a,b){return String(ult[a].proximo_fecha||"9").localeCompare(String(ult[b].proximo_fecha||"9"))});
+  return otros.length?{p:ult[otros[0]],titulo:nombres[otros[0]]||"Próximo service"}:null;
+}
+(async function(){
+  var q=new URLSearchParams(location.search),token=q.get("t");
+  var M=document.getElementById("m");
+  if(!token){M.textContent="Falta el código del QR.";return}
+  var r=await sb.rpc("ficha_publica",{p_token:token});
+  if(r.error||!r.data){M.textContent="No se encontró el vehículo.";return}
+  var d=r.data,t=d.taller||{},v=d.vehiculo||{},naut=t.rubro==="nautica";
+  var url=location.origin+location.pathname.replace(/etiqueta\.html$/,"")+"ficha.html?t="+token;
+  var qr=qrcode(0,"M");qr.addData(url);qr.make();
+  var px=proximo(d.mantenimientos),unidad=naut?" HS":" KM";
+  var veh=[v.patente,v.nombre||[v.marca,v.modelo].filter(Boolean).join(" ")].filter(Boolean).join(" · ");
+  M.innerHTML="<div class='etq' id='etq'>"+
+   (t.logo?"<img class='logo' src='"+esc(t.logo)+"' alt='"+esc(t.nombre)+"'>":"<div class='tn'>"+esc(t.nombre)+"</div>")+
+   "<div class='qr'>"+qr.createSvgTag({cellSize:4,margin:0,scalable:true})+"</div>"+
+   "<div class='px'>"+(px?"<small>"+esc(px.titulo)+"</small>"+(px.p.proximo_km?"<b>"+Number(px.p.proximo_km).toLocaleString("es-AR")+unidad+"</b>":"")+(px.p.proximo_fecha?"<span>Límite: "+fecha(px.p.proximo_fecha)+"</span>":""):"<small>Historial de services</small><span>Escaneá el código</span>")+"</div>"+
+   (veh?"<div class='veh'>"+esc(veh)+"</div>":"")+
+   "<div class='esc'>Escaneá para ver el historial</div></div>"+
+   "<div class='ops'><button class='btn' id='pr'>Imprimir</button><button class='btn o' id='img'>Descargar imagen</button><a class='btn o' href='"+esc(url)+"' target='_blank' rel='noopener' style='text-decoration:none;display:inline-flex;align-items:center'>Ver ficha</a></div>"+
+   "<p class='hint'>Imprimí en etiqueta adhesiva (mejor si es resistente al agua y al aceite) a tamaño real, 100%, sin ajustar a la página. Mide 6 × 9 cm. La información del próximo service se actualiza sola cada vez que cargás un service nuevo: solo tenés que volver a imprimirla.</p>";
+  document.getElementById("pr").onclick=function(){window.print()};
+  document.getElementById("img").onclick=function(){descargarPNG(t,qr,px,veh,unidad)};
+})();
+// Arma la misma etiqueta en un PNG (para mandarla por WhatsApp o imprimirla desde el celular)
+async function descargarPNG(t,qr,px,veh,unidad){
+  var W=600,H=900,c=document.createElement("canvas");c.width=W;c.height=H;var g=c.getContext("2d");
+  g.fillStyle="#fff";g.fillRect(0,0,W,H);g.fillStyle="#111";g.textAlign="center";
+  var y=40;
+  var logo=t.logo?await new Promise(function(res){var im=new Image();im.crossOrigin="anonymous";im.onload=function(){res(im)};im.onerror=function(){res(null)};im.src=t.logo;setTimeout(function(){res(null)},5000)}):null;
+  if(logo){var k=Math.min(440/logo.width,150/logo.height);g.drawImage(logo,(W-logo.width*k)/2,y,logo.width*k,logo.height*k);y+=logo.height*k+20}
+  else{g.font="800 46px 'Barlow Condensed',sans-serif";g.fillText(String(t.nombre||"").toUpperCase(),W/2,y+44);y+=74}
+  var n=qr.getModuleCount(),tam=380,cel=tam/n,x0=(W-tam)/2;
+  for(var r=0;r<n;r++)for(var col=0;col<n;col++)if(qr.isDark(r,col))g.fillRect(Math.floor(x0+col*cel),Math.floor(y+r*cel),Math.ceil(cel),Math.ceil(cel));
+  y+=tam+26;g.fillRect(30,y,W-60,5);y+=46;
+  g.fillStyle="#555";g.font="700 24px Barlow,sans-serif";g.fillText(px?px.titulo.toUpperCase():"HISTORIAL DE SERVICES",W/2,y);g.fillStyle="#111";
+  if(px&&px.p.proximo_km){y+=64;g.font="800 64px 'Barlow Condensed',sans-serif";g.fillText(Number(px.p.proximo_km).toLocaleString("es-AR")+unidad,W/2,y)}
+  if(px&&px.p.proximo_fecha){y+=44;g.font="700 32px Barlow,sans-serif";g.fillText("Límite: "+fecha(px.p.proximo_fecha),W/2,y)}
+  if(veh){y+=46;g.fillStyle="#444";g.font="600 22px 'JetBrains Mono',monospace";g.fillText(veh,W/2,y)}
+  g.fillStyle="#666";g.font="500 20px Barlow,sans-serif";g.fillText("Escaneá para ver el historial",W/2,H-28);
+  var a=document.createElement("a");
+  try{a.href=c.toDataURL("image/png")}catch(e){alert("No se pudo armar la imagen con el logo. Probá imprimir.");return}
+  a.download="etiqueta-service"+(veh?"-"+veh.split(" · ")[0]:"")+".png";document.body.appendChild(a);a.click();a.remove();
+}
+</script>
+</body>
+</html>
