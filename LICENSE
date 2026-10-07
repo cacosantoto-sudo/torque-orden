@@ -1,0 +1,19 @@
+Torque & Orden
+Copyright (c) 2026 [Nombre y apellido o razón social del titular]. Todos los derechos reservados.
+
+Este software y su código fuente, diseño, textos, nombre y logo son propiedad
+exclusiva del titular y están protegidos por la Ley 11.723 de Propiedad
+Intelectual de la República Argentina y por los tratados internacionales
+aplicables.
+
+No se otorga ninguna licencia de uso, copia, modificación, distribución,
+sublicencia ni venta. Que el código pueda verse públicamente no implica
+permiso para usarlo. Cualquier uso requiere autorización previa y por escrito
+del titular.
+
+El uso de la aplicación publicada en https://torque-orden.vercel.app/ se rige
+por sus Términos y Condiciones (terminos.html).
+
+Este software incluye librerías de terceros que conservan sus propias
+licencias: supabase-js (MIT), jsPDF (MIT), qrcode-generator (MIT) y las
+tipografías Barlow, Barlow Condensed y JetBrains Mono (SIL Open Font License).
