@@ -2,11 +2,12 @@
 // Lee una factura de compra de un proveedor (foto o PDF) con la API de Claude y
 // devuelve los datos en JSON para que el taller los revise antes de guardarlos.
 // Usa la misma clave que las otras funciones: variable de entorno ANTHROPIC_API_KEY.
-// Tiene un costo por uso, así que solo la pueden usar los talleres con plan pago.
+// Tiene un costo por uso, así que solo la pueden usar los talleres con plan Oro.
 
 export const config = { maxDuration: 60 };
 
-async function tienePlanPago(tallerId, accessToken) {
+// Las funciones con IA tienen costo por uso: son parte del plan Oro.
+async function tienePlanOro(tallerId, accessToken) {
   const url = process.env.SUPABASE_URL, key = process.env.SUPABASE_ANON_KEY;
   if (!url || !key || !tallerId || !accessToken) return false;
   try {
@@ -15,7 +16,8 @@ async function tienePlanPago(tallerId, accessToken) {
     });
     if (!r.ok) return false;
     const rows = await r.json();
-    return rows[0]?.plan === "pago";
+    // "pago" es el nombre viejo del plan con IA, antes de que hubiera plata y oro.
+    return rows[0]?.plan === "oro" || rows[0]?.plan === "pago";
   } catch (e) { return false; }
 }
 
@@ -56,8 +58,8 @@ export default async function handler(req, res) {
   const { archivo, tipo, taller_id, access_token } = req.body || {};
   if (!archivo || !TIPOS.includes(tipo)) return res.status(400).json({ error: "Mandá una foto (JPG/PNG) o un PDF del comprobante." });
 
-  if (!(await tienePlanPago(taller_id, access_token))) {
-    return res.status(403).json({ error: "La lectura automática de comprobantes es parte del plan pago." });
+  if (!(await tienePlanOro(taller_id, access_token))) {
+    return res.status(403).json({ error: "La lectura automática de comprobantes es parte del plan Oro." });
   }
 
   const bloque = tipo === "application/pdf"
