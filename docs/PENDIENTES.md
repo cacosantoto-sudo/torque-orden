@@ -20,12 +20,15 @@
 - Neumáticos (marca, medida, posición, vida útil con aviso de reemplazo, historial de cambios) y alineaciones con sus valores, también en la ficha pública del QR
 - Tres cajas (con nombre editable): ingresos y egresos con medio de pago (efectivo, transferencia, cheque, tarjeta), fecha y hora, saldo de cada caja discriminado por medio de pago
 - Proveedores: datos, facturas de compra con lectura automática del comprobante (foto o PDF, plan pago), repuestos comprados que suman al stock y actualizan el costo, pagos (con egreso opcional en la caja) y cuenta corriente con facturas vencidas
+- Términos y Condiciones, Política de privacidad, aceptación al crear cuenta y licencia del código (ver docs/LEGAL.md)
 - Logo del taller sin bordes blancos (PDF, ficha del QR, etiqueta y Configuración); varios celulares del taller e Instagram en el PDF, el WhatsApp del presupuesto y la ficha pública
 
 ## Por hacer
 - **Backup en una base de datos aparte para los talleres del plan pago** (los usuarios a los que se les venda la app): una copia viva de sus datos en un segundo servidor, además de la copia diaria.
 - Copia de seguridad de fotos, firmas y logos (Storage de Supabase).
 - Cerrar la activación libre del plan pago (hoy cualquiera puede activarlo desde "Mi Plan").
+
+- Completar los datos del titular en js/legal.js y LICENSE; trámites legales en docs/LEGAL.md.
 
 ## Para más adelante
 - Facturación electrónica AFIP

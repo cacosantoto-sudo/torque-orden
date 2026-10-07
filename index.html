@@ -215,12 +215,14 @@ async function cargarTalleres(){
 function renderError(e){m.innerHTML="<div class='card'><b>Hubo un error</b><p class='muted'>"+esc(e.message||e)+"</p></div>"}
 
 /* ---------------- login / registro ---------------- */
+var VERSION_LEGAL="2026-10-07"; // fecha de terminos.html y privacidad.html (igual que js/legal.js)
 function renderAuth(){
   m.innerHTML="<div class='hero'><img src='icons/icon-192.png' alt=''><h1>Torque <span class='amp'>&amp;</span> Orden</h1><p>Tu taller, ordenado desde el celular.</p></div>"+
    "<div class='centerbox card' style='margin-top:24px'><h2>Ingresar</h2>"+
    "<div id='st' class='status hide'></div>"+
    "<label for='email'>Correo</label><input id='email' type='email' autocomplete='username'>"+
    "<label for='pass'>Contraseña</label><input id='pass' type='password' autocomplete='current-password'>"+
+   "<label class='lr' style='margin-top:12px;justify-content:flex-start;align-items:flex-start;gap:8px;font:400 .95rem/1.4 inherit;text-transform:none;letter-spacing:normal'><input type='checkbox' id='acepto' style='width:auto;min-height:0;margin-top:4px'> <span class='muted' style='font-size:.9rem'>Para crear una cuenta, acepto los <a href='terminos.html' target='_blank' rel='noopener' style='color:var(--ac)'>Términos y Condiciones</a> y la <a href='privacidad.html' target='_blank' rel='noopener' style='color:var(--ac)'>Política de privacidad</a>.</span></label>"+
    "<div class='btns'><button class='btn' id='in'>Ingresar</button><button class='btn o' id='up'>Crear cuenta</button></div></div>";
   document.getElementById("in").onclick=function(){auth("in")};
   document.getElementById("up").onclick=function(){auth("up")};
@@ -228,7 +230,8 @@ function renderAuth(){
 async function auth(modo){
   var email=document.getElementById("email").value.trim(),pass=document.getElementById("pass").value;
   if(!email||pass.length<6){say("st","La contraseña debe tener al menos 6 caracteres.",true);return}
-  var r=modo==="in"?await sb.auth.signInWithPassword({email:email,password:pass}):await sb.auth.signUp({email:email,password:pass});
+  if(modo==="up"&&!document.getElementById("acepto").checked){say("st","Para crear la cuenta tenés que aceptar los Términos y Condiciones y la Política de privacidad.",true);return}
+  var r=modo==="in"?await sb.auth.signInWithPassword({email:email,password:pass}):await sb.auth.signUp({email:email,password:pass,options:{data:{acepto_terminos:new Date().toISOString(),version_terminos:VERSION_LEGAL}}});
   if(r.error){say("st",r.error.message,true);return}
   if(modo==="up"&&!r.data.session){say("st","Cuenta creada. Revisá tu correo para confirmar el ingreso y después entrá con tu contraseña.");return}
   S.session=r.data.session;await cargarTalleres();
@@ -1334,7 +1337,7 @@ var nuevoLogo=null;
 function renderConfig(){
   var t=S.taller;
   if(!esDueno()){
-   m.innerHTML="<h1>Configuración</h1><p class='muted'>Entraste como empleado de <b>"+esc(t.nombre)+"</b>. Los datos del taller, la Caja y el plan los maneja el dueño.</p>"+cardInstalarHtml();
+   m.innerHTML="<h1>Configuración</h1><p class='muted'>Entraste como empleado de <b>"+esc(t.nombre)+"</b>. Los datos del taller, la Caja y el plan los maneja el dueño.</p>"+cardInstalarHtml()+cardLegalHtml();
    conectarInstalar();return;
   }
   nuevoLogo=null;
@@ -1382,6 +1385,10 @@ function renderConfig(){
   document.getElementById("expJson").onclick=exportarJson;
   document.getElementById("expCsv").onclick=exportarCsv;
   m.insertAdjacentHTML("beforeend",cardInstalarHtml());conectarInstalar();
+  m.insertAdjacentHTML("beforeend",cardLegalHtml());
+}
+function cardLegalHtml(){
+  return "<div class='card'><h2>Legales</h2><p class='muted' style='margin:0'><a href='terminos.html' target='_blank' rel='noopener' style='color:var(--ac)'>Términos y Condiciones</a> · <a href='privacidad.html' target='_blank' rel='noopener' style='color:var(--ac)'>Política de privacidad</a></p></div>";
 }
 
 /* ---------------- copia de datos del taller ---------------- */
