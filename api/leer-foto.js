@@ -2,9 +2,10 @@
 // Usa tu clave de la API de Claude, guardada como variable de entorno ANTHROPIC_API_KEY.
 // El celular nunca ve esta clave: le habla a esta función, y esta función le habla a Claude.
 // Esta función tiene un costo real por cada uso, así que antes de llamar a Claude
-// se fija en la base de datos que el taller que pide esto tenga el plan pago.
+// se fija en la base de datos que el taller que pide esto tenga el plan Oro.
 
-async function tienePlanPago(tallerId, accessToken) {
+// Las funciones con IA tienen costo por uso: son parte del plan Oro.
+async function tienePlanOro(tallerId, accessToken) {
   const url = process.env.SUPABASE_URL, key = process.env.SUPABASE_ANON_KEY;
   if (!url || !key || !tallerId || !accessToken) return false;
   try {
@@ -13,7 +14,8 @@ async function tienePlanPago(tallerId, accessToken) {
     });
     if (!r.ok) return false;
     const rows = await r.json();
-    return rows[0]?.plan === "pago";
+    // "pago" es el nombre viejo del plan con IA, antes de que hubiera plata y oro.
+    return rows[0]?.plan === "oro" || rows[0]?.plan === "pago";
   } catch (e) { return false; }
 }
 
@@ -25,8 +27,8 @@ export default async function handler(req, res) {
 
   const { modo, rubro, texto, campos, imagen, taller_id, access_token } = req.body || {};
 
-  if (!(await tienePlanPago(taller_id, access_token))) {
-    return res.status(403).json({ error: "Esta función es parte del plan pago." });
+  if (!(await tienePlanOro(taller_id, access_token))) {
+    return res.status(403).json({ error: "Esta función es parte del plan Oro." });
   }
 
   const rubroTxt = rubro === "motos" ? "motos" : rubro === "autos" ? "autos" : "náutica";

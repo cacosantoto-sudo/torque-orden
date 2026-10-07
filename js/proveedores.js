@@ -140,10 +140,10 @@ async function renderCompraForm(){
 function pintarCompra(){
   var c=S.compra,ver=!!c.id;
   var h="";
-  if(!ver)h+="<div class='card'><h2>Comprobante</h2><p class='muted' style='margin-top:0'>Sacale una foto a la factura o subí el PDF. "+(esPago()?"Con <b>Leer automáticamente</b> se completan los datos solos y vos los revisás antes de guardar.":"Leer los datos automáticamente es una función del plan pago; igual queda guardado el comprobante.")+"</p>"+
+  if(!ver)h+="<div class='card'><h2>Comprobante</h2><p class='muted' style='margin-top:0'>Sacale una foto a la factura o subí el PDF. "+(esOro()?"Con <b>Leer automáticamente</b> se completan los datos solos y vos los revisás antes de guardar.":"Leer los datos automáticamente es una función del plan Oro; igual queda guardado el comprobante.")+"</p>"+
    "<input type='file' id='cArchivo' accept='image/*,application/pdf' aria-label='Foto o PDF del comprobante'>"+
    "<div id='cArchNom' class='muted' style='margin-top:6px'>"+(S.compraArchivo?esc(S.compraArchivo.name):"")+"</div>"+
-   (esPago()?"<div class='btns'><button class='btn o' id='cLeer'"+(S.compraArchivo?"":" disabled")+">"+ic("image")+" Leer automáticamente</button></div>":"")+
+   (esOro()?"<div class='btns'><button class='btn o' id='cLeer'"+(S.compraArchivo?"":" disabled")+">"+ic("image")+" Leer automáticamente</button></div>":"")+
    "<div id='cLeerSt' class='status hide'></div></div>";
   h+="<div class='card'><h2>Datos de la factura</h2>"+
    "<label for='cProv'>Proveedor</label><select id='cProv'"+(ver?" disabled":"")+"><option value=''>Elegí un proveedor…</option>"+S.provs.map(function(p){return "<option value='"+p.id+"'"+(p.id===c.proveedor_id?" selected":"")+">"+esc(p.nombre)+"</option>"}).join("")+"<option value='nuevo'>+ Proveedor nuevo…</option></select>"+

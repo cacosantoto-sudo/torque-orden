@@ -2,7 +2,8 @@
 // datos de una orden ya terminada. No incluye datos del cliente (nombre,
 // teléfono, matrícula/patente) para no publicar información privada.
 
-async function tienePlanPago(tallerId, accessToken) {
+// Las funciones con IA tienen costo por uso: son parte del plan Oro.
+async function tienePlanOro(tallerId, accessToken) {
   const url = process.env.SUPABASE_URL, key = process.env.SUPABASE_ANON_KEY;
   if (!url || !key || !tallerId || !accessToken) return false;
   try {
@@ -11,7 +12,8 @@ async function tienePlanPago(tallerId, accessToken) {
     });
     if (!r.ok) return false;
     const rows = await r.json();
-    return rows[0]?.plan === "pago";
+    // "pago" es el nombre viejo del plan con IA, antes de que hubiera plata y oro.
+    return rows[0]?.plan === "oro" || rows[0]?.plan === "pago";
   } catch (e) { return false; }
 }
 
@@ -23,8 +25,8 @@ export default async function handler(req, res) {
 
   const { rubro, equipo, motor, trabajos, resumenesFotos, tono, taller_id, access_token } = req.body || {};
 
-  if (!(await tienePlanPago(taller_id, access_token))) {
-    return res.status(403).json({ error: "Esta función es parte del plan pago." });
+  if (!(await tienePlanOro(taller_id, access_token))) {
+    return res.status(403).json({ error: "Esta función es parte del plan Oro." });
   }
 
   const rubroTxt = rubro === "motos" ? "motos" : rubro === "autos" ? "autos" : "náutica";

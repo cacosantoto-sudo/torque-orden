@@ -30,7 +30,8 @@ header>span{display:flex;align-items:center;flex:none}
 header b{font-family:var(--f-head);font-size:1.45rem;font-weight:800;letter-spacing:.03em;text-transform:uppercase}
 header b .amp{color:var(--ac)}
 header .plan{font-family:var(--f-mono);font-size:.75rem;letter-spacing:.08em;padding:3px 8px;border-radius:4px;border:1px solid var(--line2);color:var(--mute);vertical-align:middle;margin-left:6px;font-weight:600}
-header .plan.pago{background:var(--ac);border-color:var(--ac);color:var(--on-ac)}
+header .plan.plata{background:#c8ccd0;border-color:#c8ccd0;color:#111}
+header .plan.oro{background:var(--br);border-color:var(--br);color:#111}
 @media (max-width:560px){header .mail{display:none}header b{font-size:1.2rem;letter-spacing:.01em}header .plan{padding:2px 6px}}
 header .mail{color:var(--mute);font-size:.85rem}
 main{max-width:820px;margin:0 auto;padding:22px calc(16px + env(safe-area-inset-right)) calc(120px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left))}
@@ -53,6 +54,8 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 .tag.g{border-color:rgba(62,207,122,.5);color:var(--ok);background:rgba(62,207,122,.08)}
 img.logo-claro{background:#fff;border-radius:6px;padding:3px}
 .tag.bad{border-color:rgba(255,90,79,.5);color:var(--bad);background:rgba(255,90,79,.08)}
+.tag.plata{border-color:#c8ccd0;color:#c8ccd0;background:rgba(200,204,208,.1)}
+.tag.oro{border-color:var(--br);color:var(--br);background:rgba(255,176,32,.1)}
 label{display:block;font-family:var(--f-head);font-weight:600;font-size:.9rem;letter-spacing:.08em;text-transform:uppercase;color:var(--mute);margin:14px 0 6px}
 input,textarea,select{font:inherit;color:var(--ink);background:#0d0d0d;border:1px solid var(--line2);border-radius:10px;padding:11px 12px;width:100%;box-sizing:border-box;min-height:48px;transition:border-color .15s}
 input:focus,textarea:focus,select:focus{border-color:var(--ac);outline:none}
@@ -192,8 +195,17 @@ async function boot(){
   if(!S.session){renderAuth();return}
   await cargarTalleres();
 }
-function pintarMarca(){document.getElementById("brand").innerHTML="<span class='nm'>Torque <span class='amp'>&amp;</span> Orden</span><span class='plan"+(esPago()?" pago":"")+"'>"+(esPago()?"PAGO":"GRATIS")+"</span>"}
-function esPago(){return !!(S.taller&&S.taller.plan==="pago")}
+/* Hay tres planes: gratis, plata y oro. "pago" es el nombre viejo del plan
+   con IA, así que los talleres que lo tengan siguen contando como oro. */
+var PLANES=[
+ {id:"gratis",nombre:"Gratis",nivel:0},
+ {id:"plata", nombre:"Plata", nivel:1},
+ {id:"oro",   nombre:"Oro",   nivel:2}];
+function planTaller(){var p=S.taller&&S.taller.plan;if(p==="pago")return "oro";return PLANES.some(function(x){return x.id===p})?p:"gratis"}
+function nivelPlan(){var id=planTaller();return PLANES.filter(function(x){return x.id===id})[0].nivel}
+function nombrePlan(){var id=planTaller();return PLANES.filter(function(x){return x.id===id})[0].nombre}
+function esOro(){return nivelPlan()>=2}    /* solo oro: funciones con IA */
+function pintarMarca(){var id=planTaller();document.getElementById("brand").innerHTML="<span class='nm'>Torque <span class='amp'>&amp;</span> Orden</span><span class='plan "+id+"'>"+nombrePlan().toUpperCase()+"</span>"}
 function esDueno(){return !!(S.taller&&S.taller.rol==="dueno")}
 async function cargarTalleres(){
   try{await sb.rpc("aceptar_invitaciones")}catch(e){}
@@ -261,8 +273,18 @@ function renderCrearTaller(){
 }
 
 /* ---------------- router ---------------- */
+/* Pantallas que vienen con el plan Plata (o el Oro, que incluye todo) */
+var VISTAS_PLATA={caja:1,reportes:1,proveedores:1,provForm:1,provDetalle:1,compraForm:1,pagoForm:1,neuForm:1,aliForm:1};
+function renderBloqueoPlata(){
+  m.innerHTML="<h1>Función del plan Plata</h1>"+
+   "<div class='card'><p class='muted' style='margin-top:0'>Las cajas, los reportes, los proveedores y los neumáticos vienen con el plan <b>Plata</b>. Todo lo demás del taller sigue funcionando igual.</p>"+
+   "<div class='btns'>"+(esDueno()?"<button class='btn' id='irPlan'>Ver los planes</button>":"")+"<button class='btn o' id='irPanel'>Volver</button></div></div>";
+  var b=document.getElementById("irPlan");if(b)b.onclick=function(){S.vista="plan";route()};
+  document.getElementById("irPanel").onclick=function(){S.vista="panel";route()};
+}
 function route(){
   if(!esDueno()&&(S.vista==="caja"||S.vista==="plan"||S.vista==="reportes"))S.vista="panel";
+  if(VISTAS_PLATA[S.vista]&&nivelPlan()<1){renderBloqueoPlata();return}
   if(S.vista==="mas")renderMas();
   else if(S.vista==="reportes")renderReportes();
   else if(S.vista==="panel")renderPanel();
@@ -489,7 +511,7 @@ async function renderOrdenForm(){
   h+="<div class='big'><button id='dictar'>"+ic("mic")+" Dictar la orden</button><button id='foto'>"+ic("camera")+" Foto de datos</button></div>";
   h+="<input type='file' id='file' accept='image/*' capture='environment' class='hide'>";
   h+="<div id='st' class='status hide'></div>";
-  h+="<div id='dbox' class='card hide'><h2>Lo que dijiste</h2><textarea id='trans'></textarea><div class='btns'>"+(esPago()?"<button class='btn' id='proc'>Completar campos</button>":"<button class='btn o' id='proc' disabled>"+ic("lock")+" Completar campos (Plan pago)</button>")+"<button class='btn o' id='dstop'>Cancelar</button></div>"+(esPago()?"":"<p class='muted' style='margin-top:8px'>Podés dictar y copiar el texto a mano en los campos de abajo. Completarlos automático con IA es una función del plan pago — mirá la pestaña Mi Plan.</p>")+"</div>";
+  h+="<div id='dbox' class='card hide'><h2>Lo que dijiste</h2><textarea id='trans'></textarea><div class='btns'>"+(esOro()?"<button class='btn' id='proc'>Completar campos</button>":"<button class='btn o' id='proc' disabled>"+ic("lock")+" Completar campos (Plan Oro)</button>")+"<button class='btn o' id='dstop'>Cancelar</button></div>"+(esOro()?"":"<p class='muted' style='margin-top:8px'>Podés dictar y copiar el texto a mano en los campos de abajo. Completarlos automático con IA es una función del plan Oro — mirá la pestaña Mi Plan.</p>")+"</div>";
   h+="<div class='card'>";
   h+="<label for='f_cliente'>Cliente</label><select id='f_cliente'><option value=''>— elegir —</option>"+clientesOpt.map(function(c){return "<option value='"+c.id+"'"+(o.cliente_id===c.id?" selected":"")+">"+esc(c.nombre)+"</option>"}).join("")+"</select>";
   h+="<label for='f_equipo'>"+equipoLabel()+"</label><select id='f_equipo'></select>";
@@ -582,7 +604,7 @@ function startFull(){
   if(!rec){btn.classList.remove("rec");btn.innerHTML=ic("mic")+" Dictar la orden"}}
 var CAMPOS_IA="motivo, diagnostico, trabajos, repuestos, observaciones, medidor (solo el número)";
 async function procesarTexto(){
-  if(!esPago()){say("st","Completar campos con IA es una función del plan pago.",true);return}
+  if(!esOro()){say("st","Completar campos con IA es una función del plan Oro.",true);return}
   var txt=document.getElementById("trans").value.trim();if(!txt){say("st","Dictá o escribí algo primero.",true);return}
   stopRec();say("st","Completando los campos…");document.getElementById("proc").disabled=true;
   try{
@@ -600,7 +622,7 @@ async function procesarFoto(file){
   var blob=await shrink(file);
   fotosNuevas.push(blob);
   document.getElementById("ph").insertAdjacentHTML("beforeend","<div class='muted'>Foto agregada, se sube al guardar.</div>");
-  if(!esPago()){say("st","Foto guardada. Leer los datos de la foto con IA es una función del plan pago.");return}
+  if(!esOro()){say("st","Foto guardada. Leer los datos de la foto con IA es una función del plan Oro.");return}
   say("st","Leyendo los datos de la foto…");
   var b64=await new Promise(function(res){var fr=new FileReader();fr.onload=function(){res(fr.result.split(",")[1])};fr.readAsDataURL(blob)});
   try{
@@ -746,10 +768,10 @@ async function renderPostForm(){
   m.innerHTML="<h1>Post para Instagram</h1><p class='muted'>OT "+String(o.numero).padStart(6,"0")+" · "+esc(o.equipos?o.equipos.nombre:"")+"</p>"+
    "<div id='st' class='status hide'></div>"+
    "<div class='card'><h2>1. Elegí las fotos</h2><div id='fotos'>Cargando fotos…</div></div>"+
-   (esPago()?
+   (esOro()?
     "<div class='card'><h2>2. Estilo del texto</h2><select id='tono'><option value='profesional'>Profesional y técnico</option><option value='cercano'>Cercano, informal, con humor</option></select>"+
     "<div class='btns'><button class='btn' id='gen'>Generar texto</button></div></div>"
-    :"<div class='card'><h2>Función del plan pago</h2><p class='muted'>Generar el texto del posteo con IA está incluido en el plan pago. Andá a la pestaña <b>Mi Plan</b> para activarlo.</p></div>")+
+    :"<div class='card'><h2>Función del plan Oro</h2><p class='muted'>Generar el texto del posteo con IA está incluido en el plan Oro. Andá a la pestaña <b>Mi Plan</b> para activarlo.</p></div>")+
    "<div id='variantes'></div>"+
    "<div class='btns'><button class='btn o' id='back'>Volver</button></div>";
   document.getElementById("back").onclick=function(){S.vista="ordenes";route()};
@@ -771,7 +793,7 @@ async function renderPostForm(){
   document.querySelectorAll("[data-fid]").forEach(function(c){c.onchange=function(){postSel[c.dataset.fid]=c.checked}});
 }
 async function generarPost(){
-  if(!esPago()){say("st","Esta función es parte del plan pago.",true);return}
+  if(!esOro()){say("st","Esta función es parte del plan Oro.",true);return}
   var o=S.orden;say("st","Escribiendo el texto…");document.getElementById("gen").disabled=true;
   var resumenes=postFotos.filter(function(f){return postSel[f.id]}).map(function(f){return f.resumen}).filter(Boolean);
   try{
@@ -1220,7 +1242,8 @@ async function ajustarStock(id,delta){
 /* ---------------- menú Más ---------------- */
 function renderMas(){
   var items=(esDueno()?[["caja","Cajas","wallet"],["proveedores","Proveedores","receipt"],["reportes","Reportes","chart"],["plan","Mi Plan","crown"],["config","Configuración","sliders"]]:[["proveedores","Proveedores","receipt"],["config","Configuración","sliders"]]);
-  m.innerHTML="<h1>Más</h1><div style='height:14px'></div>"+items.map(function(x){return "<button class='fila' data-v='"+x[0]+"'>"+ic(x[2])+"<span>"+x[1]+"</span>"+ic("chevron")+"</button>"}).join("")+
+  m.innerHTML="<h1>Más</h1><div style='height:14px'></div>"+items.map(function(x){var trabado=VISTAS_PLATA[x[0]]&&nivelPlan()<1;
+    return "<button class='fila' data-v='"+x[0]+"'>"+ic(x[2])+"<span>"+x[1]+(trabado?" <span class='tag plata'>PLATA</span>":"")+"</span>"+ic("chevron")+"</button>"}).join("")+
    "<button class='fila' data-v='patente'>"+ic("camera")+"<span>Buscar por "+patenteLabel().toLowerCase()+"</span>"+ic("chevron")+"</button>";
   m.querySelectorAll(".fila[data-v]").forEach(function(b){b.onclick=function(){S.vista=b.dataset.v;route();window.scrollTo(0,0)}});
 }
@@ -1291,45 +1314,52 @@ function pintarReportes(){
 
 /* ---------------- mi plan ---------------- */
 function renderPlan(){
-  var pago=esPago();
+  var actual=planTaller(),nivel=nivelPlan();
+  var INCLUYE={
+   gratis:["Clientes, vehículos y motores sin límite",
+           "Órdenes de trabajo, con dictado por voz (se escribe solo lo que decís)",
+           "Fotos de las órdenes",
+           "Presupuestos con PDF y envío por WhatsApp",
+           "Historial digital por QR y ficha del vehículo",
+           "Mantenimientos y avisos de service",
+           "Stock de repuestos",
+           "Empleados del taller"],
+   plata: ["Todo lo del plan Gratis",
+           "Cajas: ingresos, egresos y medio de pago",
+           "Reportes del taller",
+           "Proveedores, compras y cuenta corriente",
+           "Neumáticos y alineaciones"],
+   oro:   ["Todo lo del plan Plata",
+           "Completar los campos de la orden con IA, a partir de lo que dictás",
+           "Leer los datos de una foto con IA",
+           "Leer la patente con una foto",
+           "Leer facturas de proveedores (foto o PDF) con IA",
+           "Generar posteos para Instagram con IA"]};
   var h="<h1>Mi Plan</h1>";
-  h+="<div class='card'><div class='lr'><h2 style='margin:0'>Plan actual</h2><span class='tag "+(pago?"g":"")+"'>"+(pago?"PAGO":"GRATIS")+"</span></div></div>";
-  h+="<div class='card'><h2>Incluido en el plan Gratis</h2><ul style='margin:0;padding-left:20px;color:var(--mute)'>"+
-   "<li>Clientes, equipos y motores sin límite</li>"+
-   "<li>Órdenes de trabajo, con dictado por voz (a mano, sin IA)</li>"+
-   "<li>Fotos de las órdenes (se guardan, sin lectura automática)</li>"+
-   "<li>Historial digital por QR</li>"+
-   "<li>Presupuestos con PDF y envío por WhatsApp</li>"+
-   "<li>Stock de repuestos y Caja</li>"+
-   "</ul></div>";
-  h+="<div class='card'><h2>Se suma con el plan Pago</h2><ul style='margin:0;padding-left:20px;color:var(--mute)'>"+
-   "<li>Completar los campos de la orden automáticamente con IA (a partir de lo que dictás)</li>"+
-   "<li>Lectura automática de datos desde una foto</li>"+
-   "<li>Lectura automática de facturas de compra de proveedores (foto o PDF)</li>"+
-   "<li>Generador de posteos para Instagram con IA</li>"+
-   "</ul></div>";
+  h+="<div class='card'><div class='lr'><h2 style='margin:0'>Plan actual</h2><span class='tag "+(actual==="gratis"?"":actual)+"'>"+nombrePlan().toUpperCase()+"</span></div></div>";
   h+="<div id='st' class='status hide'></div>";
-  h+="<div class='btns'>"+(pago?"<button class='btn o' id='baja'>Volver al plan gratis</button>":"<button class='btn' id='alta'>Activar plan pago</button>")+"</div>";
-  if(!pago)h+="<p class='muted' style='margin-top:10px'>Por ahora lo activás vos mismo, para que puedas probar todo. Cuando el sistema esté listo para vender a colegas, esto va a quedar atado a un cobro real (por ejemplo con Mercado Pago).</p>";
+  PLANES.forEach(function(p){
+   var esActual=p.id===actual;
+   h+="<div class='card'"+(esActual?" style='border-color:var(--ac)'":"")+">";
+   h+="<div class='lr'><h2 style='margin:0'>Plan "+p.nombre+"</h2>"+(esActual?"<span class='tag g'>ACTUAL</span>":"")+"</div>";
+   h+="<ul style='margin:10px 0 0;padding-left:20px;color:var(--mute)'>"+INCLUYE[p.id].map(function(x){return "<li>"+x+"</li>"}).join("")+"</ul>";
+   if(!esActual)h+="<div class='btns'><button class='btn"+(p.nivel<nivel?" o":"")+"' data-plan='"+p.id+"'>"+(p.nivel>nivel?"Pasar al plan "+p.nombre:"Bajar al plan "+p.nombre)+"</button></div>";
+   h+="</div>";
+  });
+  h+="<p class='muted' style='margin-top:10px'>Por ahora el plan lo cambiás vos mismo, para poder probar todo. Cuando el sistema se venda a otros talleres, esto va a quedar atado a un cobro real (por ejemplo con Mercado Pago).</p>";
   m.innerHTML=h;
-  var altaBtn=document.getElementById("alta");
-  if(altaBtn)altaBtn.onclick=async function(){
-   say("st","Activando…");
-   var r=await sb.rpc("activar_plan_pago",{p_taller_id:S.taller.id});
-   if(r.error){say("st",r.error.message,true);return}
-   S.taller.plan="pago";var idx=S.talleres.findIndex(function(t){return t.id===S.taller.id});if(idx>-1)S.talleres[idx].plan="pago";
-   pintarMarca();
-   renderPlan();
-  };
-  var bajaBtn=document.getElementById("baja");
-  if(bajaBtn)bajaBtn.onclick=async function(){
-   say("st","Desactivando…");
-   var r=await sb.rpc("desactivar_plan_pago",{p_taller_id:S.taller.id});
-   if(r.error){say("st",r.error.message,true);return}
-   S.taller.plan="gratis";var idx=S.talleres.findIndex(function(t){return t.id===S.taller.id});if(idx>-1)S.talleres[idx].plan="gratis";
-   pintarMarca();
-   renderPlan();
-  };
+  m.querySelectorAll("[data-plan]").forEach(function(b){
+   b.onclick=async function(){
+    var nuevo=b.dataset.plan;
+    say("st","Cambiando de plan…");
+    var r=await sb.rpc("cambiar_plan",{p_taller_id:S.taller.id,p_plan:nuevo});
+    if(r.error){say("st",r.error.message,true);return}
+    S.taller.plan=nuevo;
+    var idx=S.talleres.findIndex(function(t){return t.id===S.taller.id});if(idx>-1)S.talleres[idx].plan=nuevo;
+    pintarMarca();
+    renderPlan();
+   };
+  });
 }
 
 /* ---------------- configuración del taller ---------------- */
@@ -1507,8 +1537,8 @@ function normPatente(p){return String(p||"").toUpperCase().replace(/[^A-Z0-9]/g,
 function patenteLabel(){return rubroTaller()==="nautica"?"Matrícula":"Patente"}
 function renderPatente(){
   m.innerHTML="<h1>Buscar por "+patenteLabel().toLowerCase()+"</h1><div class='card'>"+
-   (esPago()?"<button class='btn' id='patFoto' style='width:100%'>"+ic("camera")+" Sacar foto a la "+patenteLabel().toLowerCase()+"</button>":
-    "<button class='btn o' disabled style='width:100%'>"+ic("lock")+" Leer la "+patenteLabel().toLowerCase()+" con foto (plan pago)</button>")+
+   (esOro()?"<button class='btn' id='patFoto' style='width:100%'>"+ic("camera")+" Sacar foto a la "+patenteLabel().toLowerCase()+"</button>":
+    "<button class='btn o' disabled style='width:100%'>"+ic("lock")+" Leer la "+patenteLabel().toLowerCase()+" con foto (plan Oro)</button>")+
    "<input type='file' id='patFile' accept='image/*' capture='environment' class='hide'>"+
    "<label for='patTxt'>"+patenteLabel()+"</label><input id='patTxt' autocapitalize='characters' autocomplete='off' placeholder='AB123CD'>"+
    "<div id='st' class='status hide'></div>"+
