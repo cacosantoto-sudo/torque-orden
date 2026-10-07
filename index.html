@@ -51,6 +51,8 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 .tag{font-family:var(--f-mono);font-size:.75rem;font-weight:600;letter-spacing:.04em;text-transform:uppercase;padding:3px 8px;border-radius:4px;border:1px solid var(--line2);color:var(--mute);white-space:nowrap;background:var(--card2)}
 .tag.w{border-color:rgba(255,176,32,.5);color:var(--br);background:rgba(255,176,32,.08)}
 .tag.g{border-color:rgba(62,207,122,.5);color:var(--ok);background:rgba(62,207,122,.08)}
+img.logo-claro{background:#fff;border-radius:6px;padding:3px}
+.tag.bad{border-color:rgba(255,90,79,.5);color:var(--bad);background:rgba(255,90,79,.08)}
 label{display:block;font-family:var(--f-head);font-weight:600;font-size:.9rem;letter-spacing:.08em;text-transform:uppercase;color:var(--mute);margin:14px 0 6px}
 input,textarea,select{font:inherit;color:var(--ink);background:#0d0d0d;border:1px solid var(--line2);border-radius:10px;padding:11px 12px;width:100%;box-sizing:border-box;min-height:48px;transition:border-color .15s}
 input:focus,textarea:focus,select:focus{border-color:var(--ac);outline:none}
@@ -130,6 +132,11 @@ input[type=search]{padding-left:40px;background-image:url("data:image/svg+xml,%3
 .chart-x{display:flex;gap:2px}.chart-x span{flex:1;text-align:center;font-family:var(--f-head);font-size:.8rem;letter-spacing:.06em;text-transform:uppercase;color:var(--mute);padding-top:4px}
 .tip{position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:#fff;color:#0a0a0a;font-size:.8rem;padding:4px 8px;border-radius:6px;white-space:nowrap;pointer-events:none;display:none;z-index:2}
 .chart .col:hover .tip,.chart .col:focus .tip{display:block}
+/* pestañas y grillas */
+.tabs{display:flex;gap:6px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:4px;margin:12px 0}
+.tabs button{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;min-height:44px;border:0;border-radius:9px;background:none;color:var(--mute);font-family:var(--f-head);font-weight:700;font-size:1rem;letter-spacing:.05em;text-transform:uppercase}
+.tabs button[aria-selected="true"]{background:var(--ac);color:var(--on-ac)}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:0 10px;align-items:end}.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:0 10px;align-items:end}
 table.t{width:100%;border-collapse:collapse;font-size:.9rem}table.t th,table.t td{padding:6px 4px;border-top:1px solid var(--line);text-align:right}table.t td{font-family:var(--f-mono);font-size:.82rem}table.t th:first-child,table.t td:first-child{text-align:left}
 </style>
 </head>
@@ -140,13 +147,21 @@ table.t{width:100%;border-collapse:collapse;font-size:.9rem}table.t th,table.t t
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 <script src="config.js"></script>
+<script src="js/logo.js"></script>
+<script src="js/vehiculos.js"></script>
+<script src="js/mantenimiento.js"></script>
+<script src="js/ordenes.js"></script>
+<script src="js/neumaticos.js"></script>
+<script src="js/cajas.js"></script>
+<script src="js/proveedores.js"></script>
 <script>
 var CFG=window.SCOTTO_CONFIG;
 var sb=window.supabase.createClient(CFG.SUPABASE_URL,CFG.SUPABASE_ANON_KEY);
 var S={session:null,talleres:[],taller:null,vista:"panel",clientes:[],equipos:[],motores:[],ordenes:[],orden:null};
 var m=document.getElementById("m"),nv=document.getElementById("nav");
-var ICONS={grid:'<rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/>',users:'<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9"/><path d="M16 3.1a4 4 0 0 1 0 7.8"/>',clipboard:'<rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/>',package:'<path d="m7.5 4.3 9 5.2"/><path d="M21 8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="M3.3 7 12 12l8.7-5"/><path d="M12 22V12"/>',menu:'<path d="M4 6h16"/><path d="M4 12h16"/><path d="M4 18h16"/>',wallet:'<path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/>',chart:'<path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/>',crown:'<path d="m2 4 3 12h14l3-12-6 7-4-7-4 7-6-7z"/><path d="M5 20h14"/>',sliders:'<path d="M4 21v-7"/><path d="M4 10V3"/><path d="M12 21v-9"/><path d="M12 8V3"/><path d="M20 21v-5"/><path d="M20 12V3"/><path d="M2 14h4"/><path d="M10 8h4"/><path d="M18 16h4"/>',smartphone:'<rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/>',camera:'<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/>',bell:'<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',message:'<path d="M7.9 20A9 9 0 1 0 4 16.1L2 22z"/>',search:'<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',printer:'<path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>',image:'<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/>',receipt:'<path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 17.5v-11"/>',mic:'<path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><path d="M12 19v3"/>',lock:'<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',pen:'<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>',stop:'<rect x="6" y="6" width="12" height="12" rx="1"/>',phone:'<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2Z"/>',pencil:'<path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>',download:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/>',trash:'<path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',chevron:'<path d="m9 18 6-6-6-6"/>',inbox:'<path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.5 5.1 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.5-6.9A2 2 0 0 0 16.8 4H7.2a2 2 0 0 0-1.7 1.1z"/>',plus:'<path d="M12 5v14"/><path d="M5 12h14"/>',logout:'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/>'};
+var ICONS={grid:'<rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/>',users:'<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9"/><path d="M16 3.1a4 4 0 0 1 0 7.8"/>',clipboard:'<rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/>',package:'<path d="m7.5 4.3 9 5.2"/><path d="M21 8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="M3.3 7 12 12l8.7-5"/><path d="M12 22V12"/>',menu:'<path d="M4 6h16"/><path d="M4 12h16"/><path d="M4 18h16"/>',wallet:'<path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/>',chart:'<path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/>',crown:'<path d="m2 4 3 12h14l3-12-6 7-4-7-4 7-6-7z"/><path d="M5 20h14"/>',sliders:'<path d="M4 21v-7"/><path d="M4 10V3"/><path d="M12 21v-9"/><path d="M12 8V3"/><path d="M20 21v-5"/><path d="M20 12V3"/><path d="M2 14h4"/><path d="M10 8h4"/><path d="M18 16h4"/>',smartphone:'<rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/>',camera:'<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/>',bell:'<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',message:'<path d="M7.9 20A9 9 0 1 0 4 16.1L2 22z"/>',search:'<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',printer:'<path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>',image:'<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/>',receipt:'<path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 17.5v-11"/>',mic:'<path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><path d="M12 19v3"/>',lock:'<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',pen:'<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>',stop:'<rect x="6" y="6" width="12" height="12" rx="1"/>',phone:'<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2Z"/>',pencil:'<path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>',download:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/>',trash:'<path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',chevron:'<path d="m9 18 6-6-6-6"/>',inbox:'<path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.5 5.1 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.5-6.9A2 2 0 0 0 16.8 4H7.2a2 2 0 0 0-1.7 1.1z"/>',plus:'<path d="M12 5v14"/><path d="M5 12h14"/>',qr:'<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3z"/><path d="M20 14v.01"/><path d="M14 20h.01"/><path d="M17 20h4v-3"/>',car:'<path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9L18.4 10.6 16 7H8l-2.4 3.6-2.1.5C2.7 11.3 2 12.1 2 13v3c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/><path d="M9 17h6"/>',logout:'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/>'};
 function ic(n){return "<svg class='ic' viewBox='0 0 24 24' aria-hidden='true' focusable='false'>"+(ICONS[n]||"")+"</svg>"}
 function skel(n,h){var o="";for(var i=0;i<(n||3);i++)o+="<div class='sk' style='height:"+(h||84)+"px'></div>";return "<div aria-busy='true' aria-label='Cargando'>"+o+"</div>"}
 function vacio(icono,titulo,texto){return "<div class='vacio'>"+ic(icono)+"<b>"+titulo+"</b>"+(texto?"<p>"+texto+"</p>":"")+"</div>"}
@@ -259,7 +274,8 @@ function route(){
   else if(S.vista==="caja")renderCaja();
   else if(S.vista==="plan")renderPlan();
   else if(S.vista==="config")renderConfig();
-  var grupo={ordenForm:"ordenes",postForm:"ordenes",presuForm:"ordenes",ficha:"clientes",patente:"clientes",caja:"mas",reportes:"mas",plan:"mas",config:"mas"}[S.vista]||S.vista;
+  else if(VISTAS[S.vista])VISTAS[S.vista]();
+  var grupo=GRUPOS[S.vista]||{ordenForm:"ordenes",postForm:"ordenes",presuForm:"ordenes",ficha:"clientes",patente:"clientes",caja:"mas",reportes:"mas",plan:"mas",config:"mas"}[S.vista]||S.vista;
   nv.querySelectorAll("button").forEach(function(b){b.setAttribute("aria-current",b.dataset.v===grupo)});
 }
 
@@ -271,11 +287,16 @@ async function renderPanel(){
   var h="<div class='card'><h2>Últimas órdenes</h2>";
   h+=r.data.length?r.data.map(function(o){var cls=o.estado==="Listo"||o.estado==="Entregado"?"g":o.estado==="En reparación"?"w":"";
     return "<div class='lr' style='border-top:1px solid var(--line);padding:8px 0'><span>OT "+String(o.numero).padStart(6,"0")+" · "+esc(o.clientes?o.clientes.nombre:"")+"</span><span class='tag "+cls+"'>"+esc(o.estado)+"</span></div>"}).join(""):"<p class='muted' style='margin:0'>Todavía no hay órdenes. Tocá <b>Nueva orden</b> para cargar la primera.</p>";
-  h+="</div><div class='btns'><button class='btn' id='ir'>Nueva orden</button><button class='btn o' id='irPat'>"+ic("camera")+" Buscar por patente</button></div>";
+  h+="</div><div class='btns'><button class='btn' id='ir'>Nueva orden</button><button class='btn o' id='irVeh'>"+ic("search")+" Buscar "+equipoLabel().toLowerCase()+"</button><button class='btn o' id='irPat'>"+ic("camera")+" Buscar por "+patenteLabel().toLowerCase()+"</button></div>";
+  h+="<div class='card' id='secBox' style='margin-top:16px'><h2>Dónde está cada "+equipoLabel().toLowerCase()+"</h2><span class='muted'>Buscando…</span></div>";
+  h+="<div class='card' id='vencBox' style='margin-top:16px'><h2>Services por vencer</h2><span class='muted'>Buscando…</span></div>";
   h+="<div class='card' id='recBox' style='margin-top:16px'><h2>Mantenimientos para recordar</h2><span class='muted'>Buscando…</span></div>";
   document.getElementById("box").outerHTML=h;
   document.getElementById("ir").onclick=function(){S.orden={estado:"Recibido"};S.vista="ordenForm";route()};
   document.getElementById("irPat").onclick=function(){S.vista="patente";route()};
+  document.getElementById("irVeh").onclick=function(){S.vista="vehiculos";route()};
+  cargarSectoresPanel();
+  cargarServicesPorVencer();
   cargarRecordatorios();
 }
 
@@ -324,17 +345,18 @@ function mensajeRecordatorio(o,hace){
 
 /* ---------------- clientes / equipos / motores ---------------- */
 async function renderClientes(){
-  m.innerHTML="<h1>Clientes</h1><div id='box'>"+skel()+"</div>";
-  var r=await sb.from("clientes").select("id,nombre,telefono,equipos(id,nombre,matricula_patente,motores(id,marca,modelo,medidor,qr_token))").order("nombre");
+  m.innerHTML="<h1>Clientes</h1>"+tabsClientes("clientes")+"<div id='box'>"+skel()+"</div>";
+  conectarTabs();
+  var r=await sb.from("clientes").select("id,nombre,telefono,equipos(*,motores(id,marca,modelo,medidor,qr_token))").order("nombre");
   if(r.error){document.getElementById("box").innerHTML=esc(r.error.message);return}
   S.clientes=r.data||[];
   var h="<div class='btns' style='margin:12px 0'><button class='btn o' id='cPat'>"+ic("camera")+" Buscar por "+patenteLabel().toLowerCase()+"</button></div>"+buscadorHtml("Buscar por nombre, teléfono, "+equipoLabel().toLowerCase()+", "+patenteLabel().toLowerCase()+" o motor",S.qClientes);
-  h+="<div class='card'><h2>Nuevo cliente</h2><label for='cn'>Nombre</label><input id='cn'><label for='ct'>Teléfono</label><input id='ct'><div class='btns'><button class='btn' id='ca'>Agregar</button></div></div>";
+  h+="<div class='card'><h2>Nuevo cliente</h2><label for='cn'>Nombre</label><input id='cn'><label for='ct'>Teléfono</label><input id='ct'><div id='stc' class='status hide'></div><div class='btns'><button class='btn' id='ca'>Agregar</button></div></div>";
   h+=S.clientes.map(function(c){
-   var eq=(c.equipos||[]).map(function(e){var mot=(e.motores||[]).map(function(mo){return "<div class='lr' style='margin-top:6px'><span class='muted'>"+esc([mo.marca,mo.modelo].filter(Boolean).join(" "))+" · "+medidorLabel().toLowerCase()+": "+esc(mo.medidor||0)+"</span><span><button class='btn o' data-qr='"+mo.qr_token+"' style='padding:4px 10px;min-height:0'>Ver QR</button> <button class='btn o icon del' data-del-motor='"+mo.id+"' style='padding:4px 10px;min-height:0' aria-label='Eliminar' title='Eliminar'>"+ic("trash")+"</button></span></div>"}).join("")||"<span class='muted'>Sin motor cargado.</span>";
-    return "<div style='margin-top:8px'><div class='lr'><button class='link' data-ficha='"+e.id+"' style='background:none;border:0;padding:8px 0;min-height:44px;font-weight:700;text-align:left;color:var(--ac)'>"+esc(e.nombre)+(e.matricula_patente?" "+plateHtml(e.matricula_patente,"sm"):"")+" ›</button><button class='btn o icon del' data-del-equipo='"+e.id+"' style='padding:4px 10px;min-height:0' aria-label='Eliminar "+equipoLabel().toLowerCase()+"' title='Eliminar "+equipoLabel().toLowerCase()+"'>"+ic("trash")+"</button></div>"+mot+"<button class='btn o' data-motor='"+e.id+"' style='margin-top:6px;padding:6px 12px;min-height:0'>+ Motor</button> <button class='btn o' data-patente='"+e.id+"' data-actual=\""+esc(e.matricula_patente||"")+"\" style='margin-top:6px;padding:6px 12px;min-height:0'>"+patenteLabel()+"</button></div>"}).join("");
-   var q=norm([c.nombre,c.telefono,String(c.telefono||"").replace(/[^0-9]/g,"")].concat((c.equipos||[]).map(function(e){return [e.nombre,e.matricula_patente,normPatente(e.matricula_patente)].concat((e.motores||[]).map(function(mo){return mo.marca+" "+mo.modelo})).join(" ")})).join(" "));
-   return "<div class='card' data-q=\""+esc(q)+"\"><div class='lr'><b>"+esc(c.nombre)+"</b><button class='btn o icon del' data-del-cliente='"+c.id+"' style='padding:6px 12px;min-height:0' aria-label='Eliminar' title='Eliminar'>"+ic("trash")+"</button></div><span class='muted'>"+esc(c.telefono||"")+"</span>"+eq+"<div style='margin-top:8px'><button class='btn o' data-equipo='"+c.id+"' style='padding:6px 12px;min-height:0'>+ "+equipoLabel()+"</button></div></div>"
+   var eq=(c.equipos||[]).map(function(e){var mot=usaMotorEnFicha()?"":(e.motores||[]).map(function(mo){return "<div class='lr' style='margin-top:6px'><span class='muted'>"+esc([mo.marca,mo.modelo].filter(Boolean).join(" "))+" · "+medidorLabel().toLowerCase()+": "+esc(mo.medidor||0)+"</span><span><button class='btn o' data-qr='"+mo.qr_token+"' style='padding:4px 10px;min-height:0'>Ver QR</button> <button class='btn o icon del' data-del-motor='"+mo.id+"' style='padding:4px 10px;min-height:0' aria-label='Eliminar' title='Eliminar'>"+ic("trash")+"</button></span></div>"}).join("")||(usaMotorEnFicha()?"":"<span class='muted'>Sin motor cargado.</span>");
+    return "<div style='margin-top:8px;border-top:1px solid var(--line);padding-top:4px'><div class='lr'><button class='link' data-ficha='"+e.id+"' style='background:none;border:0;padding:8px 0;min-height:44px;font-weight:700;text-align:left;color:var(--ac)'>"+esc(vehTitulo(e))+(e.matricula_patente?" "+plateHtml(e.matricula_patente,"sm"):"")+" ›"+(vehDetalle(e)?"<br><span class='muted' style='font-weight:400'>"+esc(vehDetalle(e))+"</span>":"")+"</button><button class='btn o icon del' data-del-equipo='"+e.id+"' style='padding:4px 10px;min-height:0' aria-label='Eliminar "+equipoLabel().toLowerCase()+"' title='Eliminar "+equipoLabel().toLowerCase()+"'>"+ic("trash")+"</button></div>"+mot+(usaMotorEnFicha()?"":"<button class='btn o' data-motor='"+e.id+"' style='margin-top:6px;padding:6px 12px;min-height:0'>+ Motor</button> <button class='btn o' data-patente='"+e.id+"' data-actual=\""+esc(e.matricula_patente||"")+"\" style='margin-top:6px;padding:6px 12px;min-height:0'>"+patenteLabel()+"</button>")+"</div>"}).join("");
+   var q=norm([c.nombre,c.telefono,String(c.telefono||"").replace(/[^0-9]/g,"")].concat((c.equipos||[]).map(function(e){return vehBusqueda(e,null)})).join(" "));
+   return "<div class='card' data-q=\""+esc(q)+"\"><div class='lr'><b>"+esc(c.nombre)+"</b><button class='btn o icon del' data-del-cliente='"+c.id+"' style='padding:6px 12px;min-height:0' aria-label='Eliminar' title='Eliminar'>"+ic("trash")+"</button></div><span class='muted'>"+esc(c.telefono||"")+"</span>"+eq+"<div style='margin-top:8px'><button class='btn o' data-equipo='"+c.id+"' style='padding:6px 12px;min-height:0'>"+ic("plus")+" Agregar "+equipoLabel().toLowerCase()+"</button></div></div>"
   }).join("");
   if(!S.clientes.length)h+=vacio("users","Todavía no hay clientes","Cargá el primero con el formulario de arriba: nombre y teléfono alcanzan.");
   h+="<p id='sinres' class='muted hide'>No hay clientes que coincidan con la búsqueda.</p>";
@@ -343,9 +365,10 @@ async function renderClientes(){
   bc.oninput=function(){S.qClientes=bc.value;filtrarLista(bc.value)};
   filtrarLista(bc.value);
   document.getElementById("ca").onclick=async function(){
-   var nom=document.getElementById("cn").value.trim();if(!nom)return;
-   await sb.from("clientes").insert({taller_id:S.taller.id,nombre:nom,telefono:document.getElementById("ct").value.trim()});
-   renderClientes()};
+   var nom=document.getElementById("cn").value.trim();if(!nom){say("stc","Escribí el nombre del cliente.",true);return}
+   var r=await sb.from("clientes").insert({taller_id:S.taller.id,nombre:nom,telefono:document.getElementById("ct").value.trim()}).select("id").single();
+   if(r.error){say("stc",r.error.message,true);return}
+   if(confirm("Cliente agregado. ¿Querés cargarle "+(equipoFem()?"una ":"un ")+equipoLabel().toLowerCase()+" ahora?"))abrirVehiculoForm(null,r.data.id,"clientes");else renderClientes()};
   m.querySelectorAll("[data-equipo]").forEach(function(b){b.onclick=function(){nuevoEquipo(b.dataset.equipo)}});
   m.querySelectorAll("[data-ficha]").forEach(function(b){b.onclick=function(){abrirFicha(b.dataset.ficha)}});
   m.querySelectorAll("[data-patente]").forEach(function(b){b.onclick=async function(){if(await editarPatente(b.dataset.patente,b.dataset.actual))renderClientes()}});
@@ -368,12 +391,7 @@ function eliminarCliente(id){
   var c=S.clientes.find(function(x){return x.id===id});
   borrarConDeshacer((c?c.nombre:"Cliente")+" eliminado",tarjetaDe("[data-del-cliente='"+id+"']"),function(){return sb.from("clientes").delete().eq("id",id)},renderClientes);
 }
-async function nuevoEquipo(clienteId){
-  var nom=prompt(equipoLabel()+" (nombre):");if(!nom)return;
-  var pat=prompt(patenteLabel()+" (opcional):")||"";
-  await sb.from("equipos").insert({taller_id:S.taller.id,cliente_id:clienteId,nombre:nom,matricula_patente:pat.trim().toUpperCase()||null});
-  renderClientes();
-}
+function nuevoEquipo(clienteId){abrirVehiculoForm(null,clienteId,"clientes")}
 async function nuevoMotor(equipoId){
   var marca=prompt("Marca del motor:");if(marca==null)return;
   var modelo=prompt("Modelo / HP:")||"";
@@ -409,24 +427,31 @@ function tarjetaDe(sel){var el=m.querySelector(sel);return el?el.closest(".card"
 
 /* ---------------- órdenes: lista ---------------- */
 async function renderOrdenes(){
-  m.innerHTML="<h1>Órdenes de trabajo</h1><div id='box'>"+skel()+"</div>";
-  var r=await sb.from("ordenes").select("id,numero,estado,clientes(nombre),equipos(nombre,matricula_patente)").order("creado",{ascending:false});
+  m.innerHTML="<h1>Órdenes de trabajo</h1>"+tabsOrdenes("ordenes")+"<div id='box'>"+skel()+"</div>";
+  conectarTabs();
+  var r=await sb.from("ordenes").select("*,clientes(nombre),equipos(nombre,marca,modelo,color,matricula_patente),presupuestos(total,estado,aprobado)").order("creado",{ascending:false});
+  if(r.error)r=await sb.from("ordenes").select("id,numero,estado,creado,clientes(nombre),equipos(nombre,matricula_patente)").order("creado",{ascending:false});
   if(r.error){document.getElementById("box").innerHTML=esc(r.error.message);return}
   var h=S.talleres&&S.taller?"":"";
   h+="<div class='btns' style='margin-bottom:12px'><button class='btn' id='nueva'>Nueva orden</button></div>";
   h+=buscadorHtml("Buscar por N° de OT, cliente, "+equipoLabel().toLowerCase()+" o "+patenteLabel().toLowerCase(),S.qOrdenes);
-  h+="<select id='festado' aria-label='Filtrar por estado' style='margin-bottom:12px'><option value=''>Todos los estados</option>"+ESTADOS.map(function(e){return "<option"+(e===S.fEstado?" selected":"")+">"+e+"</option>"}).join("")+"</select>";
+  var conSector=(r.data||[]).some(function(o){return "sector" in o});
+  h+="<div style='margin-bottom:12px;display:grid;grid-template-columns:1fr 1fr;gap:8px'><select id='festado' aria-label='Filtrar por estado' style='grid-column:1/-1'><option value=''>Todos los estados</option>"+ESTADOS.map(function(e){return "<option"+(e===S.fEstado?" selected":"")+">"+e+"</option>"}).join("")+"</select>"+
+   (conSector?"<select id='fsector' aria-label='Filtrar por sector'><option value=''>Todos los sectores</option>"+SECTORES.map(function(e){return "<option"+(e===S.fSector?" selected":"")+">"+e+"</option>"}).join("")+"</select>"+
+   "<select id='ffact' aria-label='Filtrar por facturación'><option value=''>Facturado: todos</option><option value='si'"+(S.fFact==="si"?" selected":"")+">Facturado: sí</option><option value='no'"+(S.fFact==="no"?" selected":"")+">Facturado: no</option></select>":"")+"</div>";
   h+=(r.data||[]).map(function(o){var cls=o.estado==="Listo"||o.estado==="Entregado"?"g":o.estado==="En reparación"?"w":"";
    var post=(o.estado==="Listo"||o.estado==="Entregado")?"<button class='btn o' data-post='"+o.id+"' style='padding:6px 12px;min-height:0;margin-top:8px'>"+ic("image")+" Post para Instagram</button>":"";
    var presu="<button class='btn o' data-presu='"+o.id+"' style='padding:6px 12px;min-height:0;margin-top:8px;margin-left:8px'>"+ic("receipt")+" Presupuesto</button>";
    var del="<button class='btn o icon del' data-del-orden='"+o.id+"' style='padding:6px 12px;min-height:0;margin-top:8px;margin-left:8px' aria-label='Eliminar' title='Eliminar'>"+ic("trash")+"</button>";
    var q=norm(["OT "+String(o.numero).padStart(6,"0"),o.numero,o.clientes?o.clientes.nombre:"",o.equipos?o.equipos.nombre:"",o.equipos?o.equipos.matricula_patente:"",o.equipos?normPatente(o.equipos.matricula_patente):""].join(" "));
-   return "<div class='card' data-q=\""+esc(q)+"\" data-estado=\""+esc(o.estado)+"\"><button class='item' data-id='"+o.id+"'><span><b>OT "+String(o.numero).padStart(6,"0")+"</b> · "+esc(o.clientes?o.clientes.nombre:"Sin cliente")+"<br><span class='muted'>"+esc(o.equipos?o.equipos.nombre:"")+"</span></span><span class='tag "+cls+"'>"+esc(o.estado)+"</span></button>"+post+presu+del+"</div>"}).join("")||vacio("clipboard","Todavía no hay órdenes","Tocá Nueva orden para cargar la primera.");
+   var pr=presuDe(o),extra=[sectorTag(o.sector),facturadoTag(o),pr?"<span class='tag "+clsEstadoPresu(estadoPresu(pr))+"'>Presup. "+esc(estadoPresu(pr))+" · "+plata(pr.total)+"</span>":""].filter(Boolean).join(" ");
+   return "<div class='card' data-q=\""+esc(q)+"\" data-estado=\""+esc(o.estado)+"\" data-sector=\""+esc(o.sector||"")+"\" data-fact='"+(o.facturado?"si":"no")+"'><button class='item' data-id='"+o.id+"'><span><b>OT "+String(o.numero).padStart(6,"0")+"</b> · "+esc(o.clientes?o.clientes.nombre:"Sin cliente")+"<br><span class='muted'>"+esc(o.equipos?vehTitulo(o.equipos)+(o.equipos.matricula_patente?" · "+o.equipos.matricula_patente:""):"")+"</span></span><span class='tag "+cls+"'>"+esc(o.estado)+"</span></button>"+(extra?"<div style='display:flex;gap:6px;flex-wrap:wrap;margin-top:8px'>"+extra+"</div>":"")+post+presu+del+"</div>"}).join("")||vacio("clipboard","Todavía no hay órdenes","Tocá Nueva orden para cargar la primera.");
   h+="<p id='sinres' class='muted hide'>No hay órdenes que coincidan con la búsqueda.</p>";
   document.getElementById("box").outerHTML=h;
-  var bo=document.getElementById("buscar"),fe=document.getElementById("festado");
-  function aplicar(){S.qOrdenes=bo.value;S.fEstado=fe.value;filtrarLista(bo.value,fe.value?function(el){return el.dataset.estado===fe.value}:null)}
-  bo.oninput=aplicar;fe.onchange=aplicar;aplicar();
+  var bo=document.getElementById("buscar"),fe=document.getElementById("festado"),fs=document.getElementById("fsector"),ff=document.getElementById("ffact");
+  function aplicar(){S.qOrdenes=bo.value;S.fEstado=fe.value;S.fSector=fs?fs.value:"";S.fFact=ff?ff.value:"";
+   filtrarLista(bo.value,function(el){return (!S.fEstado||el.dataset.estado===S.fEstado)&&(!S.fSector||el.dataset.sector===S.fSector)&&(!S.fFact||el.dataset.fact===S.fFact)})}
+  bo.oninput=aplicar;fe.onchange=aplicar;if(fs)fs.onchange=aplicar;if(ff)ff.onchange=aplicar;aplicar();
   document.getElementById("nueva").onclick=function(){S.orden={estado:"Recibido"};S.vista="ordenForm";route()};
   m.querySelectorAll("[data-id]").forEach(function(b){b.onclick=async function(){
    var r=await sb.from("ordenes").select("*").eq("id",b.dataset.id).single();
@@ -436,7 +461,7 @@ async function renderOrdenes(){
    var r=await sb.from("ordenes").select("*, equipos(nombre), motores(marca,modelo)").eq("id",b.dataset.post).single();
    if(r.error){alert(r.error.message);return}
    S.orden=r.data;S.vista="postForm";route()}});
-  m.querySelectorAll("[data-presu]").forEach(function(b){b.onclick=function(){abrirPresupuesto(b.dataset.presu)}});
+  m.querySelectorAll("[data-presu]").forEach(function(b){b.onclick=function(){S.volverPresu="ordenes";abrirPresupuesto(b.dataset.presu)}});
   m.querySelectorAll("[data-del-orden]").forEach(function(b){b.onclick=function(){eliminarOrden(b.dataset.delOrden)}});
 }
 function eliminarOrden(id){
@@ -455,7 +480,7 @@ async function renderOrdenForm(){
   fotosNuevas=[];
   var o=S.orden;
   if(!("estado_guardado" in o))o.estado_guardado=o.id?o.estado:null;
-  var cr=await sb.from("clientes").select("id,nombre,equipos(id,nombre,matricula_patente,motores(id,marca,modelo,medidor))").order("nombre");
+  var cr=await sb.from("clientes").select("id,nombre,equipos(*,motores(id,marca,modelo,medidor))").order("nombre");
   var clientesOpt=formClientes=cr.data||[];
   var h="<h1>"+(o.id?"OT "+String(o.numero).padStart(6,"0"):"Nueva orden")+"</h1>";
   h+="<div class='big'><button id='dictar'>"+ic("mic")+" Dictar la orden</button><button id='foto'>"+ic("camera")+" Foto de datos</button></div>";
@@ -470,9 +495,10 @@ async function renderOrdenForm(){
    h+="<div class='lr'><label for='f_"+c[0]+"'>"+c[1]+"</label><button class='mic' data-mic='"+c[0]+"' aria-label='Dictar este campo'>"+ic("mic")+"</button></div><textarea id='f_"+c[0]+"'>"+esc(o[c[0]])+"</textarea>"});
   h+="<label for='f_medidor'>"+medidorLabel()+"</label><input id='f_medidor' inputmode='decimal' value='"+esc(o.medidor)+"'>";
   h+="<label for='f_estado'>Estado</label><select id='f_estado'>"+ESTADOS.map(function(e){return "<option"+(e===o.estado?" selected":"")+">"+e+"</option>"}).join("")+"</select></div>";
+  h+=ordenExtrasHtml(o);
   if(o.id)h+="<div class='card'><h2>Firma de retiro</h2><div id='firmaBox'><div class='sk' style='height:60px'></div></div></div>";
   h+="<div class='card'><h2>Fotos</h2><div id='ph'>"+(o.id?"<span class='muted'>Cargando fotos…</span>":"<span class='muted'>Se guardan al guardar la orden.</span>")+"</div></div>";
-  h+="<div class='btns'><button class='btn' id='save'>Guardar orden</button>"+(o.id?"<button class='btn o' id='presu'>"+ic("receipt")+" Presupuesto</button>":"")+"<button class='btn o' id='back'>Volver</button>"+(o.id?"<button class='btn d' id='delOrden'>Eliminar orden</button>":"")+"</div>";
+  h+="<div class='btns'><button class='btn' id='save'>Guardar orden</button>"+(o.id?"<button class='btn o' id='presu'>"+ic("receipt")+" Presupuesto</button>":"")+(o.id&&o.equipo_id?"<button class='btn o' id='mantOT'>"+ic("plus")+" Cargar service al historial</button>":"")+"<button class='btn o' id='back'>Volver</button>"+(o.id?"<button class='btn d' id='delOrden'>Eliminar orden</button>":"")+"</div>";
   m.innerHTML=h;
   m.querySelectorAll("[data-mic]").forEach(function(b){b.onclick=function(){micField(b)}});
   document.getElementById("dictar").onclick=startFull;
@@ -486,14 +512,18 @@ async function renderOrdenForm(){
   document.getElementById("f_motor").onchange=function(){o.motor_id=this.value||null};
   pintarEquiposForm();
   document.getElementById("back").onclick=function(){stopRec();S.vista="ordenes";route()};
-  if(o.id){cargarFotos(o.id);document.getElementById("presu").onclick=function(){abrirPresupuesto(o.id)};document.getElementById("delOrden").onclick=function(){eliminarOrdenYVolver(o.id)}}
+  var mo=document.getElementById("mantOT");if(mo)mo.onclick=function(){
+   var eq=null;formClientes.forEach(function(c){(c.equipos||[]).forEach(function(x){if(x.id===o.equipo_id)eq=x})});
+   abrirMantForm({equipo_id:o.equipo_id,orden_id:o.id,km:Number(document.getElementById("f_medidor").value)||o.medidor||null},eq||{id:o.equipo_id},"ordenForm")};
+  pintarFactura(o);
+  if(o.id){cargarFotos(o.id);document.getElementById("presu").onclick=function(){S.volverPresu="ordenForm";abrirPresupuesto(o.id)};document.getElementById("delOrden").onclick=function(){eliminarOrdenYVolver(o.id)}}
 }
 var formClientes=[];
 function equiposDelForm(){var c=formClientes.find(function(x){return x.id===document.getElementById("f_cliente").value});return c?c.equipos||[]:[]}
 function pintarEquiposForm(){
   var o=S.orden,eqs=equiposDelForm(),sel=document.getElementById("f_equipo");
   if(eqs.length===1&&!o.equipo_id)o.equipo_id=eqs[0].id;
-  sel.innerHTML="<option value=''>"+(eqs.length?"— elegir —":"— el cliente no tiene "+equipoLabel().toLowerCase()+" cargado —")+"</option>"+eqs.map(function(e){return "<option value='"+e.id+"'"+(o.equipo_id===e.id?" selected":"")+">"+esc(e.nombre)+(e.matricula_patente?" · "+esc(e.matricula_patente):"")+"</option>"}).join("");
+  sel.innerHTML="<option value=''>"+(eqs.length?"— elegir —":"— el cliente no tiene "+equipoLabel().toLowerCase()+" cargado —")+"</option>"+eqs.map(function(e){return "<option value='"+e.id+"'"+(o.equipo_id===e.id?" selected":"")+">"+esc(vehTitulo(e))+(e.matricula_patente?" · "+esc(e.matricula_patente):"")+(e.color?" · "+esc(e.color):"")+"</option>"}).join("");
   pintarMotoresForm();
 }
 function pintarMotoresForm(){
@@ -591,11 +621,13 @@ async function guardarOrden(){
    medidor:Number(document.getElementById("f_medidor").value)||null,
    estado:document.getElementById("f_estado").value
   };
+  Object.assign(data,datosExtrasOrden());
   var ordenId=o.id,res;
   if(ordenId)res=await sb.from("ordenes").update(data).eq("id",ordenId).select().single();
   else res=await sb.from("ordenes").insert(data).select().single();
   if(res.error){say("st",res.error.message,true);return}
   ordenId=res.data.id;
+  if(data.estado!==o.estado_guardado)await marcarPresuRealizado(ordenId,data.estado);
   if(data.motor_id&&data.medidor){
    var mot=null;formClientes.forEach(function(c){(c.equipos||[]).forEach(function(e){(e.motores||[]).forEach(function(mo){if(mo.id===data.motor_id)mot=mo})})});
    if(mot&&data.medidor>(Number(mot.medidor)||0))await sb.from("motores").update({medidor:data.medidor}).eq("id",data.motor_id);
@@ -777,6 +809,7 @@ function calcTotal(){
 function cargarPresu(data,nuevo){
   var items=(data&&data.items)||[],meta=items.filter(function(it){return it&&it.tipo==="meta"})[0];
   S.presu=data||{total:0,aprobado:false};
+  S.presu.estadoGuardado=data?estadoPresu(data):null;
   S.presu.items=items.filter(function(it){return it&&it.tipo!=="meta"});
   if(!meta){var o=S.orden||{};
    meta=nuevo&&S.taller.rubro==="nautica"
@@ -794,7 +827,7 @@ async function renderPresuForm(){
   pintarPresu();
 }
 function tarjetaItem(it,i){
-  if(tipoItem(it)==="mano")return "<div class='card' style='padding:10px;margin-bottom:8px'>"+
+  if(tipoItem(it)==="mano"&&esNautico())return "<div class='card' style='padding:10px;margin-bottom:8px'>"+
     "<div class='lr' style='gap:8px;align-items:flex-end'>"+
      "<div style='flex:2'><label for='d_"+i+"'>Concepto</label><input id='d_"+i+"' data-f='descripcion' data-i='"+i+"' placeholder='Ej.: Service de 100 horas' value=\""+esc(it.descripcion)+"\"></div>"+
      "<div style='flex:1'><label for='p_"+i+"'>Importe</label><input id='p_"+i+"' data-f='precio' data-i='"+i+"' inputmode='decimal' value='"+esc(it.precio)+"'></div>"+
@@ -803,6 +836,7 @@ function tarjetaItem(it,i){
     "<div class='lr' style='margin-top:8px'><span></span><button class='btn d' data-del='"+i+"' style='padding:6px 12px;min-height:0'>Quitar</button></div>"+
    "</div>";
   return "<div class='card' style='padding:10px;margin-bottom:8px'>"+
+      (esNautico()?"":"<label for='t_"+i+"'>Tipo</label><select id='t_"+i+"' data-f='tipo' data-i='"+i+"'><option value=''"+(tipoItem(it)==="mano"?"":" selected")+">Repuesto / material</option><option value='mano'"+(tipoItem(it)==="mano"?" selected":"")+">Mano de obra</option></select>")+
       "<label for='d_"+i+"'>"+(esNautico()?"Repuesto o material":"Descripción")+"</label><input id='d_"+i+"' data-f='descripcion' data-i='"+i+"' value=\""+esc(it.descripcion)+"\">"+
       "<div class='lr' style='gap:8px;margin-top:8px;align-items:flex-end'>"+
        "<div style='flex:1'><label for='c_"+i+"'>Cantidad</label><input id='c_"+i+"' data-f='cantidad' data-i='"+i+"' inputmode='decimal' value='"+esc(it.cantidad)+"'></div>"+
@@ -812,7 +846,8 @@ function tarjetaItem(it,i){
     "</div>";
 }
 function pintarPresu(){
-  var box=document.getElementById("box"),M=S.presu.meta,h="";
+  var box=document.getElementById("box"),M=S.presu.meta,h="",est=estadoPresu(S.presu);
+  h+="<div class='card'><label for='presuEstado' style='margin-top:0'>Estado del presupuesto</label><select id='presuEstado'>"+ESTADOS_PRESU.map(function(e){return "<option"+(e===est?" selected":"")+">"+e+"</option>"}).join("")+"</select></div>";
   function lista(tipo){return S.presu.items.map(function(it,i){return tipoItem(it)===tipo||!esNautico()?tarjetaItem(it,i):""}).join("")}
   h+="<div class='card'><label for='formato'>Formato</label><select id='formato'>"+
     "<option value='simple'"+(esNautico()?"":" selected")+">Simple (lista de ítems)</option>"+
@@ -833,7 +868,8 @@ function pintarPresu(){
   }else{
    h+="<div class='card'><h2>Ítems</h2><div id='items'>"+lista("repuesto")+"</div>";
    h+="<button class='btn o' id='add'>+ Agregar ítem</button>";
-   h+="<div class='lr' style='margin-top:16px;font-size:1.2rem;font-weight:700'><span>Total</span><span id='tot'>"+money(calcTotal())+"</span></div></div>";
+   h+="<div class='lr' style='margin-top:16px'><span class='muted'>Repuestos</span><span id='subRep'>"+money(subtotalDe("repuesto"))+"</span></div><div class='lr'><span class='muted'>Mano de obra</span><span id='subMano'>"+money(subtotalDe("mano"))+"</span></div>";
+   h+="<div class='lr' style='margin-top:8px;font-size:1.2rem;font-weight:700'><span>Total</span><span id='tot'>"+money(calcTotal())+"</span></div></div>";
   }
   h+="<div id='st' class='status hide'></div>";
   h+="<div class='btns'>"+
@@ -842,7 +878,7 @@ function pintarPresu(){
     "<button class='btn o' id='wa'>"+ic("message")+" Enviar por WhatsApp</button>"+
     "<button class='btn o' id='copiarMsg'>Copiar mensaje</button>"+
     (S.taller.alias_pago?"<button class='btn o' id='copiarAlias'>Copiar alias</button>":"")+
-    (S.presu.aprobado?"<span class='tag g' style='align-self:center'>Aprobado</span>":"<button class='btn' id='aprobar' style='background:var(--ok)'>Aprobar presupuesto</button>")+
+    (est==="Pendiente"?"<button class='btn' id='aprobar' style='background:var(--ok)'>Aprobar presupuesto</button>":"<span class='tag "+clsEstadoPresu(est)+"' style='align-self:center'>"+esc(est)+"</span>")+
     "<button class='btn o' id='back'>Volver</button>"+
     (S.presu.id?"<button class='btn d' id='delPresu'>Eliminar presupuesto</button>":"")+
   "</div>";
@@ -854,6 +890,7 @@ function pintarPresu(){
   box.querySelectorAll("[data-f]").forEach(function(el){el.oninput=function(){
     var i=Number(el.dataset.i),f=el.dataset.f;
     S.presu.items[i][f]=el.value;
+    if(f==="tipo"&&!el.value)delete S.presu.items[i].tipo;
     var subEl=document.getElementById("sub_"+i);if(subEl)subEl.textContent=money(subItem(S.presu.items[i]));
     refrescarTotales();
   }});
@@ -872,7 +909,8 @@ function pintarPresu(){
   document.getElementById("wa").onclick=enviarWhatsApp;
   document.getElementById("copiarMsg").onclick=copiarMensaje;
   var ca=document.getElementById("copiarAlias");if(ca)ca.onclick=function(){copiarTexto(S.taller.alias_pago,"Alias copiado: "+S.taller.alias_pago)};
-  document.getElementById("back").onclick=function(){S.vista="ordenes";route()};
+  document.getElementById("back").onclick=function(){S.vista=S.volverPresu||"ordenes";route()};
+  document.getElementById("presuEstado").onchange=function(){S.presu.estado=this.value};
   var apBtn=document.getElementById("aprobar");if(apBtn)apBtn.onclick=aprobarPresupuesto;
   var delBtn=document.getElementById("delPresu");if(delBtn)delBtn.onclick=eliminarPresupuesto;
 }
@@ -888,9 +926,13 @@ async function eliminarPresupuesto(){
 async function guardarPresupuesto(){
   say("st","Guardando…");
   var meta=Object.assign({tipo:"meta"},S.presu.meta);
-  var data={taller_id:S.taller.id,orden_id:S.orden.id,items:[meta].concat(S.presu.items),total:calcTotal()};
+  var est=estadoPresu(S.presu),antes=S.presu.estadoGuardado;
+  var data={taller_id:S.taller.id,orden_id:S.orden.id,items:[meta].concat(S.presu.items),total:calcTotal(),estado:est,aprobado:["Aprobado","Parcialmente aprobado","Realizado"].indexOf(est)>=0};
   var r=await sb.from("presupuestos").upsert(data,{onConflict:"orden_id"}).select().single();
+  if(r.error&&/estado/.test(r.error.message)){delete data.estado;r=await sb.from("presupuestos").upsert(data,{onConflict:"orden_id"}).select().single()}
   if(r.error){say("st",r.error.message,true);return null}
+  if(est!==antes&&(est==="Aprobado"||est==="Parcialmente aprobado")&&["Recibido","Diagnóstico","Presupuesto"].indexOf(S.orden.estado)>=0){
+   await sb.from("ordenes").update({estado:"Aprobado"}).eq("id",S.orden.id);S.orden.estado="Aprobado"}
   cargarPresu(r.data,false);say("st","Presupuesto guardado.");return r.data;
 }
 // Montos sin ",00" cuando son enteros
@@ -898,11 +940,7 @@ function plata(n){n=Number(n)||0;return "$"+n.toLocaleString("es-AR",{minimumFra
 var VALIDEZ_PRESU=15;
 function hayDatosPago(){var t=S.taller||{};return !!(t.alias_pago||t.cbu_pago)}
 function cbuLindo(c){c=String(c||"").replace(/[^0-9]/g,"");return c.length===22?c.slice(0,8)+" "+c.slice(8):c}
-function imgADataUrl(url){return new Promise(function(res){if(!url){res(null);return}
-  var im=new Image();im.crossOrigin="anonymous";
-  im.onload=function(){try{var c=document.createElement("canvas"),k=Math.min(1,400/Math.max(im.width,im.height));c.width=im.width*k;c.height=im.height*k;
-   c.getContext("2d").drawImage(im,0,0,c.width,c.height);res({src:c.toDataURL("image/png"),w:c.width,h:c.height})}catch(e){res(null)}};
-  im.onerror=function(){res(null)};im.src=url;setTimeout(function(){res(null)},4000)})}
+function imgADataUrl(url){return recortarLogo(url,400)}
 function cuerpoNauticoPDF(doc,y,C){
   var M=S.presu.meta;
   var reps=M.materiales_cliente?[]:itemsConDatos(itemsDe("repuesto")),manos=itemsConDatos(itemsDe("mano"));
@@ -951,11 +989,15 @@ async function armarPDF(){
   doc.setFillColor.apply(doc,NEGRO);doc.rect(0,0,210,40,"F");
   doc.setFillColor.apply(doc,NARANJA);doc.rect(0,40,210,1.6,"F");
   var x0=14,logo=await imgADataUrl(t.logo_url);
-  if(logo){var tw=26,k=Math.min(20/logo.w,20/logo.h),lw=logo.w*k,lh=logo.h*k;doc.setFillColor(255,255,255);doc.roundedRect(14,7,tw,tw,3,3,"F");doc.addImage(logo.src,"PNG",14+(tw-lw)/2,7+(tw-lh)/2,lw,lh);x0=14+tw+7}
+  // logo recortado, sin marco blanco; solo si es un dibujo oscuro sobre fondo transparente lleva un fondo blanco ajustado
+  if(logo){var k=Math.min(42/logo.w,26/logo.h),lw=logo.w*k,lh=logo.h*k,ly=7+(26-lh)/2;
+   if(logo.transp&&logo.oscuro){doc.setFillColor(255,255,255);doc.roundedRect(13,ly-1,lw+2,lh+2,1.5,1.5,"F")}
+   doc.addImage(logo.src,"PNG",14,ly,lw,lh);x0=14+lw+7}
   doc.setTextColor(255,255,255);doc.setFont("helvetica","bold");doc.setFontSize(18);doc.text(String(t.nombre||"").toUpperCase(),x0,19);
   doc.setFont("helvetica","normal");doc.setFontSize(9);doc.setTextColor(200,200,195);
   var anchoC=196-x0-46,yC=26.5;
-  [t.direccion||"",[t.telefono?"Tel. "+t.telefono:"",t.instagram?"@"+String(t.instagram).replace(/^@/,""):""].filter(Boolean).join("   ·   ")].filter(Boolean).forEach(function(l){
+  var tels=telefonosDe(t.telefono),ig=instagramDe(t.instagram);
+  [t.direccion||"",tels.length?(tels.length>1?"Cel.: ":"Cel. ")+tels.join("  /  "):"",ig?"Instagram: @"+ig:""].filter(Boolean).forEach(function(l){
    doc.text(doc.splitTextToSize(l,anchoC)[0],x0,yC);yC+=5});
   doc.setFont("helvetica","bold");doc.setFontSize(9);doc.setTextColor.apply(doc,NARANJA);doc.text("PRESUPUESTO",196,15,{align:"right"});
   doc.setTextColor(255,255,255);doc.setFontSize(15);doc.text(ot,196,23,{align:"right"});
@@ -1070,9 +1112,12 @@ function mensajeNautico(){
   var obs=[String(M.observacion||"").trim(),M.materiales_cliente?"Los materiales no están incluidos en el presente presupuesto y corren por cuenta del cliente.":""].filter(Boolean);
   if(obs.length)L.push("*OBSERVACIÓN*","",obs.join("\n\n"),"");
   if(hayDatosPago()){L.push("*DATOS PARA TRANSFERENCIA*");if(t.alias_pago)L.push("Alias: *"+t.alias_pago+"*");if(t.cbu_pago)L.push("CBU/CVU: "+String(t.cbu_pago).replace(/[^0-9]/g,""));if(t.titular_pago)L.push("Titular: "+t.titular_pago);L.push("")}
-  if(t.direccion||t.telefono)L.push([t.direccion,t.telefono?"Tel. "+t.telefono:""].filter(Boolean).join(" · "));
+  contactoTaller(t).forEach(function(l){L.push(l)});
   return L.join("\n").replace(/\n{3,}/g,"\n\n").trim();
 }
+// Dirección, celulares e Instagram del taller para los mensajes de WhatsApp
+function contactoTaller(t){var tels=telefonosDe(t.telefono),ig=instagramDe(t.instagram);
+  return [t.direccion?"📍 "+t.direccion:"",tels.length?"📱 "+tels.join(" / "):"",ig?"📷 Instagram: @"+ig+" (instagram.com/"+ig+")":""].filter(Boolean)}
 function mensajePresupuesto(){
   if(esNautico())return mensajeNautico();
   var o=S.orden,t=S.taller,ot="OT "+String(o.numero).padStart(6,"0");
@@ -1085,7 +1130,7 @@ function mensajePresupuesto(){
    "*TOTAL: "+plata(calcTotal())+"*\n\n"+
    "Válido por "+VALIDEZ_PRESU+" días. Si estás de acuerdo, respondé *OK* y arrancamos."+
    (hayDatosPago()?"\n\n💳 *Para transferir*"+(t.alias_pago?"\nAlias: *"+t.alias_pago+"*":"")+(t.cbu_pago?"\nCBU/CVU: "+String(t.cbu_pago).replace(/[^0-9]/g,""):"")+(t.titular_pago?"\nTitular: "+t.titular_pago:""):"")+
-   (t.direccion||t.telefono?"\n\n"+[t.direccion,t.telefono?"Tel. "+t.telefono:""].filter(Boolean).join(" · "):"");
+   (contactoTaller(t).length?"\n\n"+contactoTaller(t).join("\n"):"");
 }
 async function copiarTexto(txt,okMsg){
   var ok=false;
@@ -1107,13 +1152,10 @@ function enviarWhatsApp(){
   window.open(url,"_blank");
 }
 async function aprobarPresupuesto(){
+  S.presu.estado="Aprobado";
   var saved=await guardarPresupuesto();
   if(!saved)return;
-  var r=await sb.from("presupuestos").update({aprobado:true}).eq("id",saved.id).select().single();
-  if(r.error){say("st",r.error.message,true);return}
-  cargarPresu(r.data,false);
-  await sb.from("ordenes").update({estado:"Aprobado"}).eq("id",S.orden.id);
-  S.orden.estado="Aprobado";
+  if(S.orden.estado!=="Aprobado"&&["Recibido","Diagnóstico","Presupuesto"].indexOf(S.orden.estado)>=0){await sb.from("ordenes").update({estado:"Aprobado"}).eq("id",S.orden.id);S.orden.estado="Aprobado"}
   pintarPresu();
   say("st","Presupuesto aprobado. La orden pasó a estado Aprobado.");
 }
@@ -1172,47 +1214,9 @@ async function ajustarStock(id,delta){
   it.cantidad=nueva;pintarStock();
 }
 
-/* ---------------- caja ---------------- */
-async function renderCaja(){
-  m.innerHTML="<h1>Caja</h1><div id='box'>"+skel()+"</div>";
-  var r=await sb.from("movimientos_caja").select("*, ordenes(numero)").order("creado",{ascending:false}).limit(60);
-  if(r.error){document.getElementById("box").innerHTML=esc(r.error.message);return}
-  S.movs=r.data||[];
-  pintarCaja();
-}
-function pintarCaja(){
-  var ingresos=S.movs.filter(function(x){return x.tipo==="ingreso"}).reduce(function(s,x){return s+Number(x.monto)},0);
-  var egresos=S.movs.filter(function(x){return x.tipo==="egreso"}).reduce(function(s,x){return s+Number(x.monto)},0);
-  var h="<div class='card'><div class='lr'><span class='muted'>Ingresos</span><b style='color:var(--ok)'>"+money(ingresos)+"</b></div>"+
-   "<div class='lr'><span class='muted'>Egresos</span><b style='color:var(--bad)'>"+money(egresos)+"</b></div>"+
-   "<div class='lr' style='margin-top:8px;font-size:1.2rem;font-weight:700'><span>Balance</span><span>"+money(ingresos-egresos)+"</span></div></div>";
-  h+="<div class='card'><h2>Nuevo movimiento</h2>"+
-   "<label for='mtipo'>Tipo</label><select id='mtipo'><option value='ingreso'>Ingreso</option><option value='egreso'>Egreso</option></select>"+
-   "<label for='mconcepto'>Concepto</label><input id='mconcepto' placeholder='Pago OT 000123, compra de repuestos, etc.'>"+
-   "<label for='mmonto'>Monto</label><input id='mmonto' inputmode='decimal'>"+
-   "<div id='stc' class='status hide'></div>"+
-   "<div class='btns'><button class='btn' id='magregar'>Registrar</button></div></div>";
-  h+=S.movs.map(function(x){
-   return "<div class='card' style='padding:10px 16px'><div class='lr'><span>"+esc(x.concepto)+(x.ordenes?" · OT "+String(x.ordenes.numero).padStart(6,"0"):"")+"<br><span class='muted' style='font-size:.85rem'>"+new Date(x.creado).toLocaleString("es-AR")+"</span></span><span class='lr' style='gap:10px'><b style='color:"+(x.tipo==="ingreso"?"var(--ok)":"var(--bad)")+"'>"+(x.tipo==="ingreso"?"+":"−")+money(x.monto)+"</b><button class='btn o icon del' data-del-mov='"+x.id+"' style='padding:4px 10px;min-height:0' aria-label='Eliminar' title='Eliminar'>"+ic("trash")+"</button></span></div></div>"
-  }).join("")||vacio("wallet","Todavía no hay movimientos","Registrá un ingreso o un egreso con el formulario de arriba.");
-  document.getElementById("box").outerHTML=h;
-  document.getElementById("magregar").onclick=agregarMovimiento;
-  m.querySelectorAll("[data-del-mov]").forEach(function(b){b.onclick=function(){eliminarMovimiento(b.dataset.delMov)}});
-}
-function eliminarMovimiento(id){
-  borrarConDeshacer("Movimiento eliminado",tarjetaDe("[data-del-mov='"+id+"']"),function(){return sb.from("movimientos_caja").delete().eq("id",id)},renderCaja);
-}
-async function agregarMovimiento(){
-  var concepto=document.getElementById("mconcepto").value.trim();
-  var monto=Number(document.getElementById("mmonto").value);
-  if(!concepto||!(monto>0)){say("stc","Completá el concepto y un monto mayor a 0.",true);return}
-  await sb.from("movimientos_caja").insert({taller_id:S.taller.id,tipo:document.getElementById("mtipo").value,concepto:concepto,monto:monto});
-  renderCaja();
-}
-
 /* ---------------- menú Más ---------------- */
 function renderMas(){
-  var items=(esDueno()?[["caja","Caja","wallet"],["reportes","Reportes","chart"],["plan","Mi Plan","crown"],["config","Configuración","sliders"]]:[["config","Configuración","sliders"]]);
+  var items=(esDueno()?[["caja","Cajas","wallet"],["proveedores","Proveedores","receipt"],["reportes","Reportes","chart"],["plan","Mi Plan","crown"],["config","Configuración","sliders"]]:[["proveedores","Proveedores","receipt"],["config","Configuración","sliders"]]);
   m.innerHTML="<h1>Más</h1><div style='height:14px'></div>"+items.map(function(x){return "<button class='fila' data-v='"+x[0]+"'>"+ic(x[2])+"<span>"+x[1]+"</span>"+ic("chevron")+"</button>"}).join("")+
    "<button class='fila' data-v='patente'>"+ic("camera")+"<span>Buscar por "+patenteLabel().toLowerCase()+"</span>"+ic("chevron")+"</button>";
   m.querySelectorAll(".fila[data-v]").forEach(function(b){b.onclick=function(){S.vista=b.dataset.v;route();window.scrollTo(0,0)}});
@@ -1234,13 +1238,13 @@ async function renderReportes(){
   document.getElementById("repPer").onchange=function(){S.repPer=this.value;pintarReportes()};
   var res=await Promise.all([
    sb.from("ordenes").select("id,numero,estado,creado,cliente_id,clientes(nombre)"),
-   sb.from("movimientos_caja").select("tipo,monto,creado"),
+   sb.from("movimientos_caja").select("*"),
    sb.from("presupuestos").select("total,aprobado,creado"),
    sb.from("repuestos").select("nombre,cantidad,stock_minimo")
   ]);
   var err=res.filter(function(r){return r.error})[0];
   if(err){document.getElementById("box").innerHTML=esc(err.error.message);return}
-  S.rep={ord:res[0].data||[],caja:res[1].data||[],presu:res[2].data||[],rep:res[3].data||[]};
+  S.rep={ord:res[0].data||[],caja:(res[1].data||[]).map(function(x){return {tipo:x.tipo,monto:x.monto,creado:x.fecha||x.creado}}),presu:res[2].data||[],rep:res[3].data||[]};
   pintarReportes();
 }
 function pintarReportes(){
@@ -1298,6 +1302,7 @@ function renderPlan(){
   h+="<div class='card'><h2>Se suma con el plan Pago</h2><ul style='margin:0;padding-left:20px;color:var(--mute)'>"+
    "<li>Completar los campos de la orden automáticamente con IA (a partir de lo que dictás)</li>"+
    "<li>Lectura automática de datos desde una foto</li>"+
+   "<li>Lectura automática de facturas de compra de proveedores (foto o PDF)</li>"+
    "<li>Generador de posteos para Instagram con IA</li>"+
    "</ul></div>";
   h+="<div id='st' class='status hide'></div>";
@@ -1334,11 +1339,11 @@ function renderConfig(){
   }
   nuevoLogo=null;
   m.innerHTML="<h1>Configuración</h1><p class='muted'>Estos datos se muestran en la ficha pública que ve el cliente al escanear el QR.</p>"+
-   "<div class='card'><h2>Logo</h2><div id='logoPrev'>"+(t.logo_url?"<img src='"+esc(t.logo_url)+"' alt='Logo actual' style='max-width:120px;border-radius:10px'>":"<span class='muted'>Todavía no cargaste un logo.</span>")+"</div>"+
+   "<div class='card'><h2>Logo</h2><div id='logoPrev'>"+(t.logo_url?"<img src='"+esc(t.logo_url)+"' alt='Logo actual' data-recortar style='max-width:120px'>":"<span class='muted'>Todavía no cargaste un logo.</span>")+"</div>"+
    "<input type='file' id='logoFile' aria-label='Elegir logo del taller' accept='image/*' style='margin-top:10px'></div>"+
    "<div class='card'>"+
    "<label for='cnom'>Nombre del taller</label><input id='cnom' value=\""+esc(t.nombre)+"\">"+
-   "<label for='ctel'>Teléfono</label><input id='ctel' value=\""+esc(t.telefono||"")+"\">"+
+   "<label for='ctel'>Celulares del taller (si son varios, separalos con /)</label><input id='ctel' value=\""+esc(t.telefono||"")+"\">"+
    "<label for='cdir'>Dirección</label><input id='cdir' value=\""+esc(t.direccion||"")+"\">"+
    "<label for='cinsta'>Instagram (usuario, sin @)</label><input id='cinsta' value=\""+esc(t.instagram||"")+"\">"+
    "<label for='cmaps'>Link de Google Maps</label><input id='cmaps' placeholder='https://maps.app.goo.gl/...' value=\""+esc(t.maps_url||"")+"\">"+
@@ -1353,9 +1358,11 @@ function renderConfig(){
   document.getElementById("logoFile").onchange=function(e){
    var f=e.target.files[0];if(!f)return;
    nuevoLogo=f;
-   document.getElementById("logoPrev").innerHTML="<img src='"+URL.createObjectURL(f)+"' alt='Logo nuevo' style='max-width:120px;border-radius:10px'>";
+   document.getElementById("logoPrev").innerHTML="<img src='"+URL.createObjectURL(f)+"' alt='Logo nuevo' data-recortar style='max-width:120px'>";
+   recortarImagenes(document.getElementById("logoPrev"));
   };
   document.getElementById("guardarCfg").onclick=guardarConfig;
+  recortarImagenes(document.getElementById("logoPrev"));
   m.insertAdjacentHTML("beforeend","<div class='card'><h2>Recordatorios de mantenimiento</h2><label for='recMeses'>Recordar a los clientes cada (meses)</label><input id='recMeses' type='number' min='1' max='36' inputmode='numeric' value='"+mesesRecordatorio()+"'><p class='muted' style='margin:6px 0 0'>Se cuenta desde el último trabajo entregado.</p><div id='recSt' class='status hide'></div></div>");
   document.getElementById("recMeses").onchange=async function(){
    var el=this,v=Math.round(Number(el.value));
@@ -1397,8 +1404,9 @@ function nombreArchivo(ext){return "torque-orden_"+norm(S.taller.nombre).replace
 async function exportarJson(){
   say("expSt","Preparando la copia…");
   try{
-   var tablas=["clientes","equipos","motores","ordenes","presupuestos","repuestos","movimientos_caja","fotos"],datos={};
-   for(var i=0;i<tablas.length;i++)datos[tablas[i]]=await traerTodo(tablas[i]);
+   var tablas=["clientes","equipos","motores","ordenes","presupuestos","repuestos","movimientos_caja","fotos","mantenimientos","neumaticos","alineaciones","cajas","proveedores","compras","compra_items","pagos_proveedor","pago_aplicaciones"],datos={};
+   // las tablas nuevas pueden no existir todavía si falta correr algún SQL
+   for(var i=0;i<tablas.length;i++){try{datos[tablas[i]]=await traerTodo(tablas[i])}catch(e){if(i<8)throw e;datos[tablas[i]]=[]}}
    var total=tablas.reduce(function(s,t){return s+datos[t].length},0);
    var copia={app:"Torque & Orden",version:1,generado:new Date().toISOString(),taller:{id:S.taller.id,nombre:S.taller.nombre,rubro:S.taller.rubro},datos:datos};
    descargarArchivo(nombreArchivo("json"),JSON.stringify(copia,null,1),"application/json");
@@ -1432,12 +1440,12 @@ async function guardarConfig(){
    p_nombre:document.getElementById("cnom").value.trim(),
    p_telefono:document.getElementById("ctel").value.trim()||null,
    p_direccion:document.getElementById("cdir").value.trim()||null,
-   p_instagram:document.getElementById("cinsta").value.trim()||null,
+   p_instagram:instagramDe(document.getElementById("cinsta").value)||null,
    p_maps_url:document.getElementById("cmaps").value.trim()||null,
    p_logo_url:logoUrl
   });
   if(r.error){say("st",r.error.message,true);return}
-  Object.assign(S.taller,{nombre:document.getElementById("cnom").value.trim(),telefono:document.getElementById("ctel").value.trim(),direccion:document.getElementById("cdir").value.trim(),instagram:document.getElementById("cinsta").value.trim(),maps_url:document.getElementById("cmaps").value.trim(),logo_url:logoUrl});
+  Object.assign(S.taller,{nombre:document.getElementById("cnom").value.trim(),telefono:document.getElementById("ctel").value.trim(),direccion:document.getElementById("cdir").value.trim(),instagram:instagramDe(document.getElementById("cinsta").value),maps_url:document.getElementById("cmaps").value.trim(),logo_url:logoUrl});
   pintarMarca();
   nuevoLogo=null;
   var pago={p_taller_id:S.taller.id,p_alias:document.getElementById("calias").value.trim(),p_cbu:document.getElementById("ccbu").value.trim(),p_titular:document.getElementById("ctit").value.trim()};
@@ -1523,7 +1531,7 @@ async function buscarPatente(txt){
   var q=normPatente(txt),res=document.getElementById("patRes");
   if(!q){say("st","Escribí la "+patenteLabel().toLowerCase()+".",true);return}
   say("st","Buscando "+q+"…");
-  var r=await sb.from("equipos").select("id,nombre,matricula_patente,clientes(nombre)");
+  var r=await sb.from("equipos").select("*,clientes(nombre)");
   if(r.error){say("st",r.error.message,true);return}
   var todos=(r.data||[]).filter(function(e){return normPatente(e.matricula_patente)});
   var exactos=todos.filter(function(e){return normPatente(e.matricula_patente)===q});
@@ -1531,25 +1539,34 @@ async function buscarPatente(txt){
   var lista=exactos.length?exactos:todos.filter(function(e){var p=normPatente(e.matricula_patente);return p.indexOf(q)>=0||q.indexOf(p)>=0});
   document.getElementById("st").classList.add("hide");
   res.innerHTML=lista.length?"<div class='card'><h2>"+(exactos.length?"Hay más de uno con esa "+patenteLabel().toLowerCase():"Parecidos")+"</h2>"+lista.map(function(e){
-    return "<button class='item' data-ficha='"+e.id+"' style='border-top:1px solid var(--line);padding:10px 0'><span>"+plateHtml(e.matricula_patente,"sm")+" "+esc(e.nombre)+"<br><span class='muted'>"+esc(e.clientes?e.clientes.nombre:"")+"</span></span><span>›</span></button>"}).join("")+"</div>":
+    return "<button class='item' data-ficha='"+e.id+"' style='border-top:1px solid var(--line);padding:10px 0'><span>"+plateHtml(e.matricula_patente,"sm")+" "+esc(vehTitulo(e))+"<br><span class='muted'>"+esc([vehDetalle(e),e.clientes?e.clientes.nombre:""].filter(Boolean).join(" · "))+"</span></span><span>›</span></button>"}).join("")+"</div>":
    "<div class='card'><h2>No encontramos "+esc(q)+"</h2><p class='muted' style='margin:0'>Cargá la "+patenteLabel().toLowerCase()+" desde <b>Clientes</b> (botón \""+patenteLabel()+"\" debajo de cada "+equipoLabel().toLowerCase()+") para encontrarla la próxima vez.</p></div>";
   res.querySelectorAll("[data-ficha]").forEach(function(b){b.onclick=function(){abrirFicha(b.dataset.ficha)}});
 }
-function abrirFicha(equipoId){S.fichaId=equipoId;S.vista="ficha";route()}
+function abrirFicha(equipoId){if(["clientes","vehiculos","patente","panel"].indexOf(S.vista)>=0)S.volverFicha=S.vista==="patente"?"vehiculos":S.vista;S.fichaId=equipoId;S.vista="ficha";route();window.scrollTo(0,0)}
 async function renderFicha(){
   m.innerHTML="<h1>Ficha</h1><div id='box'>"+skel()+"</div>";
-  var r=await sb.from("equipos").select("id,nombre,matricula_patente,notas,cliente_id,clientes(id,nombre,telefono),motores(id,marca,modelo,medidor,qr_token)").eq("id",S.fichaId).single();
+  var r=await sb.from("equipos").select("*,clientes(id,nombre,telefono),motores(id,marca,modelo,medidor,qr_token)").eq("id",S.fichaId).single();
   if(r.error){document.getElementById("box").innerHTML=esc(r.error.message);return}
   var e=r.data,c=e.clientes||{};
-  var o=await sb.from("ordenes").select("id,numero,estado,creado,motivo,trabajos").eq("equipo_id",e.id).order("creado",{ascending:false});
+  var o=await sb.from("ordenes").select("id,numero,estado,creado,motivo,trabajos,medidor").eq("equipo_id",e.id).order("creado",{ascending:false});
   var ords=o.data||[],tel=telWa(c.telefono);
-  var h="<h1>"+esc(e.nombre)+"</h1>"+(e.matricula_patente?"<p style='margin:10px 0 14px'>"+plateHtml(e.matricula_patente,"lg")+"</p>":"");
+  var mr=await sb.from("mantenimientos").select("*").eq("equipo_id",e.id),mants=mr.error?null:(mr.data||[]),kmAct=kmActualDe(ords,mants,e.motores);
+  var neus=null,alis=null;
+  if(usaNeumaticos()){var nr=await Promise.all([sb.from("neumaticos").select("*").eq("equipo_id",e.id).order("fecha",{ascending:false}),sb.from("alineaciones").select("*").eq("equipo_id",e.id).order("fecha",{ascending:false})]);
+   if(!nr[0].error&&!nr[1].error){neus=nr[0].data||[];alis=nr[1].data||[];kmAct=kmActualDe(ords,(mants||[]).concat(neus,alis),e.motores)}}
+  var h="<h1>"+esc(vehTitulo(e))+"</h1>"+(vehDetalle(e)?"<p class='muted' style='margin:4px 0 0'>"+esc(vehDetalle(e))+"</p>":"")+(e.matricula_patente?"<p style='margin:10px 0 14px'>"+plateHtml(e.matricula_patente,"lg")+"</p>":"<div style='height:12px'></div>");
+  if(e.qr_token||mants)h+="<div class='btns' style='margin:0 0 12px'>"+(mants?"<button class='btn' id='fMant2'>"+ic("plus")+" Cargar service</button>":"")+(e.qr_token?"<button class='btn o' id='fQR'>"+ic("qr")+" QR y ficha digital</button>":"")+"</div>";
+  if(mants)h+=fichaProximosHtml(mants,kmAct);
   h+="<div class='card'><h2>Cliente</h2><b>"+esc(c.nombre||"")+"</b><br><span class='muted'>"+esc(c.telefono||"Sin teléfono")+"</span>"+
    (tel?"<div class='btns' style='margin-top:10px'><a class='btn o' style='padding:6px 12px;min-height:0;text-decoration:none' target='_blank' rel='noopener' href='https://wa.me/"+tel+"'>"+ic("message")+" WhatsApp</a><a class='btn o' style='padding:6px 12px;min-height:0;text-decoration:none' href='tel:"+esc(String(c.telefono).replace(/[^0-9+]/g,""))+"'>"+ic("phone")+" Llamar</a></div>":"")+"</div>";
-  h+="<div class='card'><h2>Motores</h2>"+((e.motores||[]).map(function(mo){return "<div class='lr' style='margin-top:6px'><span>"+esc([mo.marca,mo.modelo].filter(Boolean).join(" ")||"Motor")+"<br><span class='muted'>"+medidorLabel().toLowerCase()+": "+esc(mo.medidor||0)+"</span></span><button class='btn o' data-qr='"+mo.qr_token+"' style='padding:4px 10px;min-height:0'>Ver QR</button></div>"}).join("")||"<span class='muted'>Sin motor cargado.</span>")+"</div>";
+  h+=fichaDatosHtml(e);
+  if(!usaMotorEnFicha()||(e.motores||[]).length)h+="<div class='card'><h2>Motores</h2>"+((e.motores||[]).map(function(mo){return "<div class='lr' style='margin-top:6px'><span>"+esc([mo.marca,mo.modelo].filter(Boolean).join(" ")||"Motor")+"<br><span class='muted'>"+medidorLabel().toLowerCase()+": "+esc(mo.medidor||0)+"</span></span><button class='btn o' data-qr='"+mo.qr_token+"' style='padding:4px 10px;min-height:0'>Ver QR</button></div>"}).join("")||"<span class='muted'>Sin motor cargado.</span>")+"</div>";
+  if(mants)h+=fichaMantHtml(mants);
+  if(neus)h+=fichaNeumaticosHtml(neus,alis);
   if(e.notas)h+="<div class='card'><h2>Notas</h2><p style='margin:0;white-space:pre-wrap'>"+esc(e.notas)+"</p></div>";
-  h+="<div class='card'><h2>Historial ("+ords.length+")</h2>"+(ords.length?ords.map(function(x){var cls=x.estado==="Listo"||x.estado==="Entregado"?"g":x.estado==="En reparación"?"w":"";
-    return "<button class='item' data-oid='"+x.id+"' style='border-top:1px solid var(--line);padding:10px 0'><span><b>OT "+String(x.numero).padStart(6,"0")+"</b> · "+new Date(x.creado).toLocaleDateString("es-AR")+"<br><span class='muted'>"+esc((x.trabajos||x.motivo||"").slice(0,90))+"</span></span><span class='tag "+cls+"'>"+esc(x.estado)+"</span></button>"}).join(""):"<span class='muted'>Todavía no hay órdenes para "+(equipoFem()?"esta ":"este ")+equipoLabel().toLowerCase()+".</span>")+"</div>";
+  h+="<div class='card'><h2>Órdenes de trabajo ("+ords.length+")</h2>"+(ords.length?ords.map(function(x){var cls=x.estado==="Listo"||x.estado==="Entregado"?"g":x.estado==="En reparación"?"w":"";
+    return "<button class='item' data-oid='"+x.id+"' style='border-top:1px solid var(--line);padding:10px 0'><span><b>OT "+String(x.numero).padStart(6,"0")+"</b> · "+new Date(x.creado).toLocaleDateString("es-AR")+(x.medidor?" · "+kmTxt(x.medidor):"")+"<br><span class='muted'>"+esc((x.trabajos||x.motivo||"").slice(0,90))+"</span></span><span class='tag "+cls+"'>"+esc(x.estado)+"</span></button>"}).join(""):"<span class='muted'>Todavía no hay órdenes para "+(equipoFem()?"esta ":"este ")+equipoLabel().toLowerCase()+".</span>")+"</div>";
   h+="<div class='btns'><button class='btn' id='fNueva'>Nueva orden</button><button class='btn o' id='fPat'>"+ic("pencil")+" "+patenteLabel()+"</button><button class='btn o' id='back'>Volver</button></div>";
   m.innerHTML=h;
   m.querySelectorAll("[data-qr]").forEach(function(b){b.onclick=function(){verQR(b.dataset.qr);window.scrollTo(0,0)}});
@@ -1558,7 +1575,12 @@ async function renderFicha(){
    if(x.error){alert(x.error.message);return}S.orden=x.data;S.vista="ordenForm";route()}});
   document.getElementById("fNueva").onclick=function(){S.orden={estado:"Recibido",cliente_id:c.id,equipo_id:e.id,motor_id:(e.motores||[]).length===1?e.motores[0].id:null};S.vista="ordenForm";route()};
   document.getElementById("fPat").onclick=async function(){if(await editarPatente(e.id,e.matricula_patente))renderFicha()};
-  document.getElementById("back").onclick=function(){S.vista="clientes";route()};
+  document.getElementById("fEditar").onclick=function(){abrirVehiculoForm(e.id,e.cliente_id,"ficha")};
+  conectarFichaMant(e,kmAct);
+  if(neus)conectarFichaNeu(e,kmAct,neus);
+  var fm2=document.getElementById("fMant2");if(fm2)fm2.onclick=function(){abrirMantForm({equipo_id:e.id,km:kmAct||null},e)};
+  var fq=document.getElementById("fQR");if(fq)fq.onclick=function(){verQRVehiculo(e,tel)};
+  document.getElementById("back").onclick=function(){S.vista=S.volverFicha||"clientes";route()};
 }
 async function editarPatente(equipoId,actual){
   var p=prompt(patenteLabel()+":",actual||"");if(p==null)return false;
