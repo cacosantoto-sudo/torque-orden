@@ -19,7 +19,8 @@ function subtotalesPresu(p){
 }
 function tabsOrdenes(activa){
   return "<div class='tabs' role='tablist'><button role='tab' data-tab='ordenes' aria-selected='"+(activa==="ordenes")+"'>"+ic("clipboard")+" Órdenes</button>"+
-   "<button role='tab' data-tab='presupuestos' aria-selected='"+(activa==="presupuestos")+"'>"+ic("receipt")+" Presupuestos</button></div>"}
+   "<button role='tab' data-tab='presupuestos' aria-selected='"+(activa==="presupuestos")+"'>"+ic("receipt")+" Presupuestos</button>"+
+   "<button role='tab' data-tab='articulos' aria-selected='"+(activa==="articulos")+"'>"+ic("package")+" Artículos</button></div>"}
 function sectorTag(s){return s?"<span class='tag' style='border-color:rgba(255,106,19,.45);color:var(--ac2)'>"+esc(s)+"</span>":""}
 function facturadoTag(o){return o.facturado?"<span class='tag g'>Facturado</span>":(o.estado==="Listo"||o.estado==="Entregado")?"<span class='tag w'>Sin facturar</span>":""}
 
@@ -121,13 +122,19 @@ async function cargarSectoresPanel(){
   var r=await sb.from("ordenes").select("*,clientes(nombre),equipos(nombre,marca,modelo,matricula_patente)").neq("estado","Entregado");
   if(!document.getElementById("secBox"))return;
   if(r.error||!(r.data||[]).some(function(o){return "sector" in o})){box.remove();return}
-  var grupos={};(r.data||[]).forEach(function(o){var s=o.sector||"Sin sector asignado";(grupos[s]=grupos[s]||[]).push(o)});
+  var vig=(r.data||[]).slice().sort(function(a,b){return String(a.creado).localeCompare(String(b.creado))});
+  var grupos={};vig.forEach(function(o){var s=o.sector||"Sin sector asignado";(grupos[s]=grupos[s]||[]).push(o)});
   var orden=SECTORES.concat(Object.keys(grupos).filter(function(s){return SECTORES.indexOf(s)<0}));
-  var h="<h2>Dónde está cada "+equipoLabel().toLowerCase()+"</h2>";
+  var h="<h2>Órdenes vigentes</h2><p class='muted' style='margin:-4px 0 8px;font-size:.9rem'>"+vig.length+" "+(vig.length===1?equipoLabel().toLowerCase():equipoPlural())+" en el taller, por sector. Primero los que llevan más días.</p>";
   var filas=orden.filter(function(s){return grupos[s]}).map(function(s){
    return "<div style='border-top:1px solid var(--line);padding:8px 0'><div class='lr'><b style='font-family:var(--f-head);text-transform:uppercase;letter-spacing:.05em'>"+esc(s)+"</b><span class='tag'>"+grupos[s].length+"</span></div>"+
-    grupos[s].map(function(o){var e=o.equipos;return "<button class='item' data-ot='"+o.id+"' style='padding:4px 0;min-height:40px'><span>"+(e?esc(vehTitulo(e))+(e.matricula_patente?" "+plateHtml(e.matricula_patente,"sm"):""):"OT "+String(o.numero).padStart(6,"0"))+"<br><span class='muted' style='font-size:.88rem'>OT "+String(o.numero).padStart(6,"0")+" · "+esc(o.clientes?o.clientes.nombre:"")+" · "+esc(o.estado)+"</span></span><span class='muted'>›</span></button>"}).join("")+"</div>"}).join("");
+    grupos[s].map(function(o){var e=o.equipos;return "<button class='item' data-ot='"+o.id+"' style='padding:4px 0;min-height:40px'><span>"+(e?esc(vehTitulo(e))+(e.matricula_patente?" "+plateHtml(e.matricula_patente,"sm"):""):"OT "+String(o.numero).padStart(6,"0"))+"<br><span class='muted' style='font-size:.88rem'>OT "+String(o.numero).padStart(6,"0")+" · "+esc(o.clientes?o.clientes.nombre:"")+" · "+esc(o.estado)+"</span>"+
+     "<br><span class='muted' style='font-size:.88rem'>Ingresó el "+fechaAR(o.creado)+"</span> "+diasTag(o)+"</span><span class='muted'>›</span></button>"}).join("")+"</div>"}).join("");
   box.innerHTML=h+(filas||"<p class='muted' style='margin:0'>No hay "+equipoPlural()+" en el taller.</p>");
   box.querySelectorAll("[data-ot]").forEach(function(b){b.onclick=async function(){var x=await sb.from("ordenes").select("*").eq("id",b.dataset.ot).single();if(x.error){alert(x.error.message);return}S.orden=x.data;S.vista="ordenForm";route()}});
 }
+// Días que lleva el vehículo en el taller desde que se abrió la orden
+function diasEnTaller(o){var d=new Date(o.creado);if(isNaN(d))return null;var a=new Date(d.getFullYear(),d.getMonth(),d.getDate()),h=new Date();h=new Date(h.getFullYear(),h.getMonth(),h.getDate());return Math.max(0,Math.round((h-a)/86400000))}
+function diasTag(o){var n=diasEnTaller(o);if(n==null)return "";
+  return "<span class='tag "+(n>=15?"bad":n>=7?"w":"")+"' title='Ingresó el "+fechaAR(o.creado)+"'>"+(n===0?"Ingresó hoy":n===1?"1 día en el taller":n+" días en el taller")+"</span>"}
 function equipoPlural(){var r=rubroTaller();return r==="nautica"?"embarcaciones":r==="motos"?"motos":"vehículos"}

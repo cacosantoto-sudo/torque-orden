@@ -34,7 +34,8 @@ async function renderProveedores(){
   cta.compras.forEach(function(c){saldo[c.proveedor_id]=(saldo[c.proveedor_id]||0)+(Number(c.total)||0);if(c.vencida)venc[c.proveedor_id]=(venc[c.proveedor_id]||0)+1});
   cta.pagos.forEach(function(p){saldo[p.proveedor_id]=(saldo[p.proveedor_id]||0)-(Number(p.importe)||0)});
   var total=Object.keys(saldo).reduce(function(a,k){return a+saldo[k]},0);
-  var h="<div class='btns' style='margin:0 0 12px'><button class='btn' id='pvNueva'>"+ic("receipt")+" Cargar factura de compra</button><button class='btn o' id='pvNuevo'>"+ic("plus")+" Proveedor</button></div>";
+  var h="<div class='btns' style='margin:0 0 12px'><button class='btn' id='pvNueva'>"+ic("receipt")+" Cargar factura de compra</button><button class='btn o' id='pvIA'>"+ic("image")+" Cargar con IA"+(esOro()?"":" <span class='tag'>ORO</span>")+"</button><button class='btn o' id='pvNuevo'>"+ic("plus")+" Proveedor</button></div>";
+  if(S.avisoProv){h="<div class='status'>"+esc(S.avisoProv)+"</div>"+h;S.avisoProv=null}
   if(rp.data.length)h+="<div class='tiles'><div class='tile'><span class='muted'>Les debés en total</span><br><b style='font-size:1.2rem'>"+money(total)+"</b></div>"+
    "<div class='tile'><span class='muted'>Facturas vencidas</span><br><b style='font-size:1.2rem;color:"+(Object.keys(venc).length?"var(--bad)":"var(--ink)")+"'>"+cta.compras.filter(function(c){return c.vencida}).length+"</b></div></div>"+
    buscadorHtml("Nombre, CUIT o teléfono",S.qProv);
@@ -45,6 +46,7 @@ async function renderProveedores(){
     "<span style='text-align:right'><span class='muted' style='font-size:.8rem'>"+(s<0?"A favor":"Saldo")+"</span><br><b style='color:"+(s>0?"var(--bad)":"var(--ok)")+"'>"+money(Math.abs(s))+"</b></span></button></div>"}).join("")||
    vacio("package","Todavía no hay proveedores","Cargá uno, o cargá directamente una factura de compra: el proveedor se crea solo.");
   box.innerHTML=h;
+  document.getElementById("pvIA").onclick=function(){irProvIA("")};
   document.getElementById("pvNuevo").onclick=function(){irProv("provForm",{provEdit:null,volverProvForm:"proveedores"})};
   document.getElementById("pvNueva").onclick=function(){irProv("compraForm",{compraProv:null,volverCompra:"proveedores"})};
   var b=document.getElementById("buscar");if(b){b.oninput=function(){S.qProv=this.value;filtrarLista(this.value)};if(S.qProv)filtrarLista(S.qProv)}
@@ -86,7 +88,7 @@ async function renderProvDetalle(){
   var p=rp.data,cta;try{cta=await cuentaProveedores(p.id)}catch(e){m.innerHTML=esc(e.message);return}
   var tc=cta.compras.reduce(function(a,c){return a+(Number(c.total)||0)},0),tp=cta.pagos.reduce(function(a,x){return a+(Number(x.importe)||0)},0),saldo=redondo(tc-tp);
   var h="<h1>"+esc(p.nombre)+"</h1>"+(S.avisoProv?"<div class='status'>"+esc(S.avisoProv)+"</div>":"")+
-   "<div class='btns' style='margin:0 0 12px'><button class='btn' id='pdCompra'>"+ic("receipt")+" Factura de compra</button><button class='btn o' id='pdPago'>"+ic("wallet")+" Registrar pago</button><button class='btn o' id='pdEditar'>"+ic("pencil")+" Datos</button></div>"+
+   "<div class='btns' style='margin:0 0 12px'><button class='btn' id='pdCompra'>"+ic("receipt")+" Factura de compra</button><button class='btn o' id='pdPago'>"+ic("wallet")+" Registrar pago</button><button class='btn o' id='pdIA'>"+ic("image")+" Cargar con IA"+(esOro()?"":" <span class='tag'>ORO</span>")+"</button><button class='btn o' id='pdEditar'>"+ic("pencil")+" Datos</button></div>"+
    "<div class='tiles'><div class='tile'><span class='muted'>Compras</span><br><b>"+money(tc)+"</b></div><div class='tile'><span class='muted'>Pagado</span><br><b style='color:var(--ok)'>"+money(tp)+"</b></div>"+
    "<div class='tile'><span class='muted'>"+(saldo<0?"Saldo a favor":"Saldo a pagar")+"</span><br><b style='font-size:1.2rem;color:"+(saldo>0?"var(--bad)":"var(--ok)")+"'>"+money(Math.abs(saldo))+"</b></div></div>";
   var datos=[["CUIT",p.cuit],["Teléfono",p.telefono],["Email",p.email],["Dirección",p.direccion],["Contacto",p.contacto],["Condiciones de pago",p.condiciones_pago],["Observaciones",p.observaciones]].filter(function(x){return x[1]});
@@ -103,7 +105,7 @@ async function renderProvDetalle(){
    if(v.tipo==="c")return "<div class='card' style='padding:10px 16px'><div class='lr'><span>"+ic("receipt")+" <b>Factura "+(x.numero?esc(x.numero):"")+"</b> "+tagPago(x)+"<br><span class='muted' style='font-size:.85rem'>"+fechaAR(x.fecha)+(x.condicion_pago?" · "+esc(x.condicion_pago):"")+"</span></span>"+
     "<span style='text-align:right'><b style='color:var(--bad);white-space:nowrap'>+"+money(x.total)+"</b><br><span class='muted' style='font-size:.8rem'>Saldo "+money(v.saldo)+"</span></span></div>"+
     "<div class='btns' style='margin-top:6px'><button class='btn o' data-ver-compra='"+x.id+"' style='padding:6px 12px;min-height:0'>Ver detalle</button>"+(x.comprobante_ruta?"<button class='btn o' data-comp='"+esc(x.comprobante_ruta)+"' style='padding:6px 12px;min-height:0'>"+ic("image")+" Comprobante</button>":"")+"</div></div>";
-   return "<div class='card' style='padding:10px 16px'><div class='lr'><span>"+ic("wallet")+" <b>Pago</b> <span class='tag'>"+medioTxt(x.medio_pago)+"</span><br><span class='muted' style='font-size:.85rem'>"+fechaAR(x.fecha)+(x.observaciones?" · "+esc(x.observaciones):"")+"</span></span>"+
+   return "<div class='card' style='padding:10px 16px'><div class='lr'><span>"+ic("wallet")+" <b>"+(x.medio_pago==="nota_credito"?"Nota de crédito":"Pago")+"</b> <span class='tag'>"+medioProvTxt(x.medio_pago)+"</span><br><span class='muted' style='font-size:.85rem'>"+fechaAR(x.fecha)+(x.observaciones?" · "+esc(x.observaciones):"")+"</span></span>"+
     "<span class='lr' style='gap:10px'><span style='text-align:right'><b style='color:var(--ok);white-space:nowrap'>−"+money(x.importe)+"</b><br><span class='muted' style='font-size:.8rem'>Saldo "+money(v.saldo)+"</span></span>"+
     "<button class='btn o icon del' data-del-pago='"+x.id+"' style='padding:4px 10px;min-height:0' aria-label='Eliminar pago' title='Eliminar pago'>"+ic("trash")+"</button></span></div></div>"}).join("")||vacio("receipt","Sin movimientos","Todavía no hay facturas ni pagos de este proveedor."));
   S.avisoProv=null;
@@ -111,6 +113,7 @@ async function renderProvDetalle(){
   document.getElementById("pdVolver").onclick=function(){irProv("proveedores")};
   document.getElementById("pdEditar").onclick=function(){irProv("provForm",{provEdit:p.id,volverProvForm:"provDetalle"})};
   document.getElementById("pdCompra").onclick=function(){irProv("compraForm",{compraProv:p.id,compraEdit:null,volverCompra:"provDetalle"})};
+  document.getElementById("pdIA").onclick=function(){irProvIA(p.id)};
   document.getElementById("pdPago").onclick=function(){irProv("pagoForm",{pagoProv:p.id})};
   m.querySelectorAll("[data-ver-compra]").forEach(function(b){b.onclick=function(){irProv("compraForm",{compraEdit:b.dataset.verCompra,compraProv:p.id,volverCompra:"provDetalle"})}});
   m.querySelectorAll("[data-comp]").forEach(function(b){b.onclick=function(){abrirDocumento(b.dataset.comp)}});
@@ -123,13 +126,13 @@ async function renderProvDetalle(){
 }
 
 /* ---------- factura de compra ---------- */
-function itemVacio(){return {descripcion:"",marca:"",codigo:"",cantidad:1,costo_unitario:0,total:0}}
+function itemCompraVacio(){return {descripcion:"",marca:"",codigo:"",cantidad:1,costo_unitario:0,total:0}}
 async function renderCompraForm(){
   m.innerHTML="<h1>"+(S.compraEdit?"Factura de compra":"Cargar factura de compra")+"</h1><div id='box'>"+skel()+"</div>";
   var rp=await sb.from("proveedores").select("*").order("nombre");
   if(rp.error){document.getElementById("box").innerHTML="<div class='status err'>"+FALTA_SQL_PROV+"</div>";return}
   S.provs=rp.data||[];
-  var c={proveedor_id:S.compraProv||"",fecha:hoyISO(),items:[itemVacio()]};
+  var c={proveedor_id:S.compraProv||"",fecha:hoyISO(),items:[itemCompraVacio()]};
   if(S.compraEdit){
    var rc=await sb.from("compras").select("*").eq("id",S.compraEdit).single();if(rc.error){m.innerHTML=esc(rc.error.message);return}
    var ri=await sb.from("compra_items").select("*").eq("compra_id",S.compraEdit);
@@ -164,7 +167,7 @@ function pintarCompra(){
   if(S.compraProvNuevo){sel.value="nuevo";pintarProvNuevo(S.compraProvNuevo)}
   var fa=document.getElementById("cArchivo");if(fa)fa.onchange=function(){S.compraArchivo=this.files[0]||null;document.getElementById("cArchNom").textContent=S.compraArchivo?S.compraArchivo.name:"";var l=document.getElementById("cLeer");if(l)l.disabled=!S.compraArchivo};
   var bl=document.getElementById("cLeer");if(bl)bl.onclick=leerComprobante;
-  var ad=document.getElementById("cAddItem");if(ad)ad.onclick=function(){leerItemsCompra();S.compra.items.push(itemVacio());pintarItemsCompra()};
+  var ad=document.getElementById("cAddItem");if(ad)ad.onclick=function(){leerItemsCompra();S.compra.items.push(itemCompraVacio());pintarItemsCompra()};
   document.getElementById("cGuardar").onclick=guardarCompra;
   document.getElementById("cVolver").onclick=function(){S.compraProvNuevo=null;irProv(S.volverCompra||"proveedores")};
   var vc=document.getElementById("cVerComp");if(vc)vc.onclick=function(){abrirDocumento(c.comprobante_ruta)};
