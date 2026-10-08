@@ -3,7 +3,7 @@
 // compras y pagos, se asocia cada una a su proveedor, se marcan los posibles duplicados
 // y el taller revisa y corrige todo antes de confirmar. El saldo se actualiza solo.
 var VISTAS=window.VISTAS||(window.VISTAS={}),GRUPOS=window.GRUPOS||(window.GRUPOS={});
-VISTAS.provIA=renderProvIA;GRUPOS.provIA="mas";
+VISTAS.provIA=renderProvIA;GRUPOS.provIA="proveedores";
 
 var TIPOS_OP=[["compra","Factura"],["pago","Pago"],["nota_credito","Nota de crédito"]];
 function tipoOpTxt(t){var x=TIPOS_OP.filter(function(y){return y[0]===t})[0];return x?x[1]:t}
