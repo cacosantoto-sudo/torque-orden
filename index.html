@@ -50,6 +50,9 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:12px}
 .muted{color:var(--mute)}
 .tag{font-family:var(--f-mono);font-size:.75rem;font-weight:600;letter-spacing:.04em;text-transform:uppercase;padding:3px 8px;border-radius:4px;border:1px solid var(--line2);color:var(--mute);white-space:nowrap;background:var(--card2)}
+.sugs{border:1px solid var(--line2);border-radius:8px;background:var(--card2);margin-top:4px;overflow:hidden}
+.sugs button{display:flex;justify-content:space-between;gap:10px;width:100%;text-align:left;background:none;border:0;border-top:1px solid var(--line);color:var(--ink);padding:10px 12px;min-height:44px;font:inherit;cursor:pointer}
+.sugs button:first-child{border-top:0}.sugs button:hover,.sugs button:focus{background:var(--card)}
 .tag.w{border-color:rgba(255,176,32,.5);color:var(--br);background:rgba(255,176,32,.08)}
 .tag.g{border-color:rgba(62,207,122,.5);color:var(--ok);background:rgba(62,207,122,.08)}
 img.logo-claro{background:#fff;border-radius:6px;padding:3px}
@@ -159,6 +162,9 @@ table.t{width:100%;border-collapse:collapse;font-size:.9rem}table.t th,table.t t
 <script src="js/neumaticos.js"></script>
 <script src="js/cajas.js"></script>
 <script src="js/proveedores.js"></script>
+<script src="js/clientes.js"></script>
+<script src="js/articulos.js"></script>
+<script src="js/proveedores-ia.js"></script>
 <script>
 var CFG=window.SCOTTO_CONFIG;
 var sb=window.supabase.createClient(CFG.SUPABASE_URL,CFG.SUPABASE_ANON_KEY);
@@ -274,7 +280,7 @@ function renderCrearTaller(){
 
 /* ---------------- router ---------------- */
 /* Pantallas que vienen con el plan Plata (o el Oro, que incluye todo) */
-var VISTAS_PLATA={caja:1,reportes:1,proveedores:1,provForm:1,provDetalle:1,compraForm:1,pagoForm:1,neuForm:1,aliForm:1};
+var VISTAS_PLATA={caja:1,reportes:1,proveedores:1,provForm:1,provDetalle:1,compraForm:1,pagoForm:1,provIA:1,neuForm:1,aliForm:1};
 function renderBloqueoPlata(){
   m.innerHTML="<h1>Función del plan Plata</h1>"+
    "<div class='card'><p class='muted' style='margin-top:0'>Las cajas, los reportes, los proveedores y los neumáticos vienen con el plan <b>Plata</b>. Todo lo demás del taller sigue funcionando igual.</p>"+
@@ -313,7 +319,7 @@ async function renderPanel(){
   h+=r.data.length?r.data.map(function(o){var cls=o.estado==="Listo"||o.estado==="Entregado"?"g":o.estado==="En reparación"?"w":"";
     return "<div class='lr' style='border-top:1px solid var(--line);padding:8px 0'><span>OT "+String(o.numero).padStart(6,"0")+" · "+esc(o.clientes?o.clientes.nombre:"")+"</span><span class='tag "+cls+"'>"+esc(o.estado)+"</span></div>"}).join(""):"<p class='muted' style='margin:0'>Todavía no hay órdenes. Tocá <b>Nueva orden</b> para cargar la primera.</p>";
   h+="</div><div class='btns'><button class='btn' id='ir'>Nueva orden</button><button class='btn o' id='irVeh'>"+ic("search")+" Buscar "+equipoLabel().toLowerCase()+"</button><button class='btn o' id='irPat'>"+ic("camera")+" Buscar por "+patenteLabel().toLowerCase()+"</button></div>";
-  h+="<div class='card' id='secBox' style='margin-top:16px'><h2>Dónde está cada "+equipoLabel().toLowerCase()+"</h2><span class='muted'>Buscando…</span></div>";
+  h+="<div class='card' id='secBox' style='margin-top:16px'><h2>Órdenes vigentes</h2><span class='muted'>Buscando…</span></div>";
   h+="<div class='card' id='vencBox' style='margin-top:16px'><h2>Services por vencer</h2><span class='muted'>Buscando…</span></div>";
   h+="<div class='card' id='recBox' style='margin-top:16px'><h2>Mantenimientos para recordar</h2><span class='muted'>Buscando…</span></div>";
   document.getElementById("box").outerHTML=h;
@@ -372,7 +378,7 @@ function mensajeRecordatorio(o,hace){
 async function renderClientes(){
   m.innerHTML="<h1>Clientes</h1>"+tabsClientes("clientes")+"<div id='box'>"+skel()+"</div>";
   conectarTabs();
-  var r=await sb.from("clientes").select("id,nombre,telefono,equipos(*,motores(id,marca,modelo,medidor,qr_token))").order("nombre");
+  var r=await sb.from("clientes").select("*,equipos(*,motores(id,marca,modelo,medidor,qr_token))").order("nombre");
   if(r.error){document.getElementById("box").innerHTML=esc(r.error.message);return}
   S.clientes=r.data||[];
   var h="<div class='btns' style='margin:12px 0'><button class='btn o' id='cPat'>"+ic("camera")+" Buscar por "+patenteLabel().toLowerCase()+"</button></div>"+buscadorHtml("Buscar por nombre, teléfono, "+equipoLabel().toLowerCase()+", "+patenteLabel().toLowerCase()+" o motor",S.qClientes);
@@ -380,8 +386,8 @@ async function renderClientes(){
   h+=S.clientes.map(function(c){
    var eq=(c.equipos||[]).map(function(e){var mot=usaMotorEnFicha()?"":(e.motores||[]).map(function(mo){return "<div class='lr' style='margin-top:6px'><span class='muted'>"+esc([mo.marca,mo.modelo].filter(Boolean).join(" "))+" · "+medidorLabel().toLowerCase()+": "+esc(mo.medidor||0)+"</span><span><button class='btn o' data-qr='"+mo.qr_token+"' style='padding:4px 10px;min-height:0'>Ver QR</button> <button class='btn o icon del' data-del-motor='"+mo.id+"' style='padding:4px 10px;min-height:0' aria-label='Eliminar' title='Eliminar'>"+ic("trash")+"</button></span></div>"}).join("")||(usaMotorEnFicha()?"":"<span class='muted'>Sin motor cargado.</span>");
     return "<div style='margin-top:8px;border-top:1px solid var(--line);padding-top:4px'><div class='lr'><button class='link' data-ficha='"+e.id+"' style='background:none;border:0;padding:8px 0;min-height:44px;font-weight:700;text-align:left;color:var(--ac)'>"+esc(vehTitulo(e))+(e.matricula_patente?" "+plateHtml(e.matricula_patente,"sm"):"")+" ›"+(vehDetalle(e)?"<br><span class='muted' style='font-weight:400'>"+esc(vehDetalle(e))+"</span>":"")+"</button><button class='btn o icon del' data-del-equipo='"+e.id+"' style='padding:4px 10px;min-height:0' aria-label='Eliminar "+equipoLabel().toLowerCase()+"' title='Eliminar "+equipoLabel().toLowerCase()+"'>"+ic("trash")+"</button></div>"+mot+(usaMotorEnFicha()?"":"<button class='btn o' data-motor='"+e.id+"' style='margin-top:6px;padding:6px 12px;min-height:0'>+ Motor</button> <button class='btn o' data-patente='"+e.id+"' data-actual=\""+esc(e.matricula_patente||"")+"\" style='margin-top:6px;padding:6px 12px;min-height:0'>"+patenteLabel()+"</button>")+"</div>"}).join("");
-   var q=norm([c.nombre,c.telefono,String(c.telefono||"").replace(/[^0-9]/g,"")].concat((c.equipos||[]).map(function(e){return vehBusqueda(e,null)})).join(" "));
-   return "<div class='card' data-q=\""+esc(q)+"\"><div class='lr'><b>"+esc(c.nombre)+"</b><button class='btn o icon del' data-del-cliente='"+c.id+"' style='padding:6px 12px;min-height:0' aria-label='Eliminar' title='Eliminar'>"+ic("trash")+"</button></div><span class='muted'>"+esc(c.telefono||"")+"</span>"+eq+"<div style='margin-top:8px'><button class='btn o' data-equipo='"+c.id+"' style='padding:6px 12px;min-height:0'>"+ic("plus")+" Agregar "+equipoLabel().toLowerCase()+"</button></div></div>"
+   var q=norm([c.nombre,c.telefono,String(c.telefono||"").replace(/[^0-9]/g,""),c.email,c.dni_cuit,c.direccion,c.localidad].concat((c.equipos||[]).map(function(e){return vehBusqueda(e,null)})).join(" "));
+   return "<div class='card' data-q=\""+esc(q)+"\"><div class='lr'><b>"+esc(c.nombre)+"</b><span style='display:flex;gap:6px'><button class='btn o icon' data-edit-cliente='"+c.id+"' style='padding:6px 12px;min-height:0' aria-label='Editar datos' title='Editar datos'>"+ic("pencil")+"</button><button class='btn o icon del' data-del-cliente='"+c.id+"' style='padding:6px 12px;min-height:0' aria-label='Eliminar' title='Eliminar'>"+ic("trash")+"</button></span></div><span class='muted'>"+esc(datosClienteTxt(c))+"</span>"+eq+"<div style='margin-top:8px'><button class='btn o' data-equipo='"+c.id+"' style='padding:6px 12px;min-height:0'>"+ic("plus")+" Agregar "+equipoLabel().toLowerCase()+"</button></div></div>"
   }).join("");
   if(!S.clientes.length)h+=vacio("users","Todavía no hay clientes","Cargá el primero con el formulario de arriba: nombre y teléfono alcanzan.");
   h+="<p id='sinres' class='muted hide'>No hay clientes que coincidan con la búsqueda.</p>";
@@ -401,6 +407,7 @@ async function renderClientes(){
   m.querySelectorAll("[data-motor]").forEach(function(b){b.onclick=function(){nuevoMotor(b.dataset.motor)}});
   m.querySelectorAll("[data-qr]").forEach(function(b){b.onclick=function(){verQR(b.dataset.qr)}});
   m.querySelectorAll("[data-del-cliente]").forEach(function(b){b.onclick=function(){eliminarCliente(b.dataset.delCliente)}});
+  m.querySelectorAll("[data-edit-cliente]").forEach(function(b){b.onclick=function(){editarCliente(b.dataset.editCliente,"clientes")}});
   m.querySelectorAll("[data-del-equipo]").forEach(function(b){b.onclick=function(){eliminarEquipo(b.dataset.delEquipo)}});
   m.querySelectorAll("[data-del-motor]").forEach(function(b){b.onclick=function(){eliminarMotor(b.dataset.delMotor)}});
 }
@@ -469,7 +476,7 @@ async function renderOrdenes(){
    var presu="<button class='btn o' data-presu='"+o.id+"' style='padding:6px 12px;min-height:0;margin-top:8px;margin-left:8px'>"+ic("receipt")+" Presupuesto</button>";
    var del="<button class='btn o icon del' data-del-orden='"+o.id+"' style='padding:6px 12px;min-height:0;margin-top:8px;margin-left:8px' aria-label='Eliminar' title='Eliminar'>"+ic("trash")+"</button>";
    var q=norm(["OT "+String(o.numero).padStart(6,"0"),o.numero,o.clientes?o.clientes.nombre:"",o.equipos?o.equipos.nombre:"",o.equipos?o.equipos.matricula_patente:"",o.equipos?normPatente(o.equipos.matricula_patente):""].join(" "));
-   var pr=presuDe(o),extra=[sectorTag(o.sector),facturadoTag(o),pr?"<span class='tag "+clsEstadoPresu(estadoPresu(pr))+"'>Presup. "+esc(estadoPresu(pr))+" · "+plata(pr.total)+"</span>":""].filter(Boolean).join(" ");
+   var pr=presuDe(o),extra=[sectorTag(o.sector),o.estado!=="Entregado"?diasTag(o):"",facturadoTag(o),pr?"<span class='tag "+clsEstadoPresu(estadoPresu(pr))+"'>Presup. "+esc(estadoPresu(pr))+" · "+plata(pr.total)+"</span>":""].filter(Boolean).join(" ");
    return "<div class='card' data-q=\""+esc(q)+"\" data-estado=\""+esc(o.estado)+"\" data-sector=\""+esc(o.sector||"")+"\" data-fact='"+(o.facturado?"si":"no")+"'><button class='item' data-id='"+o.id+"'><span><b>OT "+String(o.numero).padStart(6,"0")+"</b> · "+esc(o.clientes?o.clientes.nombre:"Sin cliente")+"<br><span class='muted'>"+esc(o.equipos?vehTitulo(o.equipos)+(o.equipos.matricula_patente?" · "+o.equipos.matricula_patente:""):"")+"</span></span><span class='tag "+cls+"'>"+esc(o.estado)+"</span></button>"+(extra?"<div style='display:flex;gap:6px;flex-wrap:wrap;margin-top:8px'>"+extra+"</div>":"")+post+presu+del+"</div>"}).join("")||vacio("clipboard","Todavía no hay órdenes","Tocá Nueva orden para cargar la primera.");
   h+="<p id='sinres' class='muted hide'>No hay órdenes que coincidan con la búsqueda.</p>";
   document.getElementById("box").outerHTML=h;
@@ -849,6 +856,7 @@ async function renderPresuForm(){
   m.innerHTML="<h1>Presupuesto</h1><p class='muted'>OT "+String(o.numero).padStart(6,"0")+" · "+esc(o.clientes?o.clientes.nombre:"Sin cliente")+"</p><div id='box'>"+skel()+"</div>";
   var r=await sb.from("presupuestos").select("*").eq("orden_id",o.id).maybeSingle();
   cargarPresu(r.data,!r.data);
+  await cargarArticulos();
   pintarPresu();
 }
 function tarjetaItem(it,i){
@@ -862,7 +870,8 @@ function tarjetaItem(it,i){
    "</div>";
   return "<div class='card' style='padding:10px;margin-bottom:8px'>"+
       (esNautico()?"":"<label for='t_"+i+"'>Tipo</label><select id='t_"+i+"' data-f='tipo' data-i='"+i+"'><option value=''"+(tipoItem(it)==="mano"?"":" selected")+">Repuesto / material</option><option value='mano'"+(tipoItem(it)==="mano"?" selected":"")+">Mano de obra</option></select>")+
-      "<label for='d_"+i+"'>"+(esNautico()?"Repuesto o material":"Descripción")+"</label><input id='d_"+i+"' data-f='descripcion' data-i='"+i+"' value=\""+esc(it.descripcion)+"\">"+
+      "<label for='d_"+i+"'>"+(esNautico()?"Repuesto o material":"Descripción")+"</label><input id='d_"+i+"' data-f='descripcion' data-i='"+i+"' placeholder='Escribí y elegí de tus artículos' value=\""+esc(it.descripcion)+"\">"+
+      (it.codigo?"<div class='muted' style='font-size:.8rem;margin-top:2px'>Código "+esc(it.codigo)+"</div>":"")+
       "<div class='lr' style='gap:8px;margin-top:8px;align-items:flex-end'>"+
        "<div style='flex:1'><label for='c_"+i+"'>Cantidad</label><input id='c_"+i+"' data-f='cantidad' data-i='"+i+"' inputmode='decimal' value='"+esc(it.cantidad)+"'></div>"+
        "<div style='flex:1'><label for='p_"+i+"'>Precio unit.</label><input id='p_"+i+"' data-f='precio' data-i='"+i+"' inputmode='decimal' value='"+esc(it.precio)+"'></div>"+
@@ -938,6 +947,7 @@ function pintarPresu(){
   document.getElementById("presuEstado").onchange=function(){S.presu.estado=this.value};
   var apBtn=document.getElementById("aprobar");if(apBtn)apBtn.onclick=aprobarPresupuesto;
   var delBtn=document.getElementById("delPresu");if(delBtn)delBtn.onclick=eliminarPresupuesto;
+  conectarArticulos(box);
 }
 async function eliminarPresupuesto(){
   if(!S.presu.id)return;
@@ -958,7 +968,8 @@ async function guardarPresupuesto(){
   if(r.error){say("st",r.error.message,true);return null}
   if(est!==antes&&(est==="Aprobado"||est==="Parcialmente aprobado")&&["Recibido","Diagnóstico","Presupuesto"].indexOf(S.orden.estado)>=0){
    await sb.from("ordenes").update({estado:"Aprobado"}).eq("id",S.orden.id);S.orden.estado="Aprobado"}
-  cargarPresu(r.data,false);say("st","Presupuesto guardado.");return r.data;
+  var nArt=await guardarArticulosNuevos(S.presu.items);
+  cargarPresu(r.data,false);say("st","Presupuesto guardado."+(nArt?(nArt===1?" Se sumó 1 artículo nuevo a la base.":" Se sumaron "+nArt+" artículos nuevos a la base."):""));return r.data;
 }
 // Montos sin ",00" cuando son enteros
 function plata(n){n=Number(n)||0;return "$"+n.toLocaleString("es-AR",{minimumFractionDigits:n%1?2:0,maximumFractionDigits:2})}
@@ -1334,6 +1345,7 @@ function renderPlan(){
            "Leer los datos de una foto con IA",
            "Leer la patente con una foto",
            "Leer facturas de proveedores (foto o PDF) con IA",
+           "Cargar cuentas corrientes de proveedores con IA: compras, pagos y duplicados",
            "Generar posteos para Instagram con IA"]};
   var h="<h1>Mi Plan</h1>";
   h+="<div class='card'><div class='lr'><h2 style='margin:0'>Plan actual</h2><span class='tag "+(actual==="gratis"?"":actual)+"'>"+nombrePlan().toUpperCase()+"</span></div></div>";
