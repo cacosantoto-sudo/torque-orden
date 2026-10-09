@@ -28,7 +28,16 @@
 - Copia de seguridad de fotos, firmas y logos (Storage de Supabase).
 - Cerrar el cambio libre de plan (hoy el dueño puede pasarse a Plata u Oro desde "Mi Plan" sin pagar).
 
-- Completar los datos del titular en js/legal.js y LICENSE; trámites legales en docs/LEGAL.md.
+### Legales (detalle en docs/LEGAL.md)
+- Completar los datos del titular (nombre o razón social, CUIT, domicilio, correo de contacto y ciudad) en js/legal.js y LICENSE.
+- Hacer privado el repositorio en GitHub (hoy el código es público).
+- Pasar Vercel al plan Pro antes de cobrar (el plan Hobby no permite uso comercial).
+- Inscribirse en ARCA (ex AFIP), por ejemplo en el Monotributo como servicios informáticos, y facturar cada cobro.
+- Registrar la base de datos de usuarios ante la Agencia de Acceso a la Información Pública.
+- Registrar la marca "Torque & Orden" en el INPI (clases 9 y 42), buscando antes que esté libre.
+- Opcional: registrar el software en la Dirección Nacional del Derecho de Autor.
+- Al cobrar a consumidores: botón de baja y botón de arrepentimiento visibles en la app.
+- Hacer revisar los Términos y la Política de privacidad por un abogado antes de vender a otros talleres.
 
 ## Para más adelante
 - Facturación electrónica AFIP
