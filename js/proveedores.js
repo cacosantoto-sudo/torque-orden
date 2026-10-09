@@ -4,7 +4,7 @@
 var VISTAS=window.VISTAS||(window.VISTAS={}),GRUPOS=window.GRUPOS||(window.GRUPOS={});
 VISTAS.proveedores=renderProveedores;VISTAS.provForm=renderProvForm;VISTAS.provDetalle=renderProvDetalle;
 VISTAS.compraForm=renderCompraForm;VISTAS.pagoForm=renderPagoForm;
-["proveedores","provForm","provDetalle","compraForm","pagoForm"].forEach(function(v){GRUPOS[v]="mas"});
+["proveedores","provForm","provDetalle","compraForm","pagoForm"].forEach(function(v){GRUPOS[v]="proveedores"});
 
 var FALTA_SQL_PROV="Falta correr el SQL nuevo en Supabase (sql/2026-10-06_6_proveedores.sql) para usar proveedores.";
 function irProv(vista,extra){Object.assign(S,extra||{});S.vista=vista;route()}
@@ -34,7 +34,7 @@ async function renderProveedores(){
   cta.compras.forEach(function(c){saldo[c.proveedor_id]=(saldo[c.proveedor_id]||0)+(Number(c.total)||0);if(c.vencida)venc[c.proveedor_id]=(venc[c.proveedor_id]||0)+1});
   cta.pagos.forEach(function(p){saldo[p.proveedor_id]=(saldo[p.proveedor_id]||0)-(Number(p.importe)||0)});
   var total=Object.keys(saldo).reduce(function(a,k){return a+saldo[k]},0);
-  var h="<div class='btns' style='margin:0 0 12px'><button class='btn' id='pvNueva'>"+ic("receipt")+" Cargar factura de compra</button><button class='btn o' id='pvIA'>"+ic("image")+" Cargar con IA"+(esOro()?"":" <span class='tag'>ORO</span>")+"</button><button class='btn o' id='pvNuevo'>"+ic("plus")+" Proveedor</button></div>";
+  var h="<div class='btns' style='margin:0 0 12px'><button class='btn' id='pvNueva'>"+ic("receipt")+" Cargar factura de compra</button><button class='btn o' id='pvIA'>"+ic("image")+" Cargar con IA"+(esOro()?"":" <span class='tag'>ORO</span>")+"</button><button class='btn o' id='pvNuevo'>"+ic("plus")+" Proveedor</button><button class='btn o' id='pvListas'>"+ic("tag")+" Listas de precio</button></div>";
   if(S.avisoProv){h="<div class='status'>"+esc(S.avisoProv)+"</div>"+h;S.avisoProv=null}
   if(rp.data.length)h+="<div class='tiles'><div class='tile'><span class='muted'>Les debés en total</span><br><b style='font-size:1.2rem'>"+money(total)+"</b></div>"+
    "<div class='tile'><span class='muted'>Facturas vencidas</span><br><b style='font-size:1.2rem;color:"+(Object.keys(venc).length?"var(--bad)":"var(--ink)")+"'>"+cta.compras.filter(function(c){return c.vencida}).length+"</b></div></div>"+
@@ -47,6 +47,7 @@ async function renderProveedores(){
    vacio("package","Todavía no hay proveedores","Cargá uno, o cargá directamente una factura de compra: el proveedor se crea solo.");
   box.innerHTML=h;
   document.getElementById("pvIA").onclick=function(){irProvIA("")};
+  document.getElementById("pvListas").onclick=function(){irProv("listas")};
   document.getElementById("pvNuevo").onclick=function(){irProv("provForm",{provEdit:null,volverProvForm:"proveedores"})};
   document.getElementById("pvNueva").onclick=function(){irProv("compraForm",{compraProv:null,volverCompra:"proveedores"})};
   var b=document.getElementById("buscar");if(b){b.oninput=function(){S.qProv=this.value;filtrarLista(this.value)};if(S.qProv)filtrarLista(S.qProv)}
