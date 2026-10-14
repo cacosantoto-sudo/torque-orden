@@ -1,8 +1,10 @@
 // Tres cajas de dinero: ingresos, egresos y saldo de cada una, discriminado por medio de pago.
-var MEDIOS=[["efectivo","Efectivo"],["transferencia","Transferencia bancaria"],["cheque","Cheque"],["tarjeta","Tarjeta de crédito"]];
+var MEDIOS=[["efectivo","Efectivo"],["transferencia","Transferencia bancaria"],["cheque","Cheque"],["tarjeta","Tarjeta de crédito"],["billetera","Billetera virtual"]];
 // Bancos y billeteras más comunes (se puede escribir cualquier otro)
 var BANCOS=["Mercado Pago","Ualá","Naranja X","Brubank","Personal Pay","Cuenta DNI","MODO","Lemon","Prex","Banco Nación","Banco Provincia","Banco Ciudad","Banco Galicia","Banco Santander","BBVA","Banco Macro","ICBC","Banco Credicoop","Banco Patagonia","Banco Supervielle","HSBC","Banco Hipotecario","Banco Comafi","Banco Itaú","Banco Industrial","Banco Columbia","Banco del Sol","Banco de Córdoba","Banco Santa Fe","Banco Entre Ríos","Banco San Juan","Banco Nación (BNA+)"];
 function usaBanco(medio){return medio==="transferencia"||medio==="tarjeta"}
+function esBilletera(c){return !!(c&&c.tipo==="billetera")}
+function clienteCaja(n){var k=norm(n).trim();return k?(S.cajaClientes||[]).filter(function(c){return norm(c.nombre).trim()===k})[0]||null:null}
 function medioTxt(v){var x=MEDIOS.filter(function(m){return m[0]===v})[0];return x?x[1]:"Efectivo"}
 function ahoraLocal(){var d=new Date();d.setMinutes(d.getMinutes()-d.getTimezoneOffset());return d.toISOString().slice(0,16)}
 function fechaMov(x){return x.fecha||x.creado}
@@ -17,6 +19,7 @@ async function renderCaja(){
    rc=await sb.from("cajas").select("*").order("orden");
   }
   S.cajas=rc.error?null:(rc.data||[]);
+  var rcl=await sb.from("clientes").select("id,nombre,dni_cuit").order("nombre");S.cajaClientes=rcl.error?[]:(rcl.data||[]);
   try{S.movs=await traerTodo("movimientos_caja","*, ordenes(numero)")}catch(e){document.getElementById("box").innerHTML=esc(e.message);return}
   S.movs.sort(function(a,b){return String(fechaMov(b)).localeCompare(String(fechaMov(a)))});
   if(S.cajas&&S.cajas.length&&!S.cajas.some(function(c){return c.id===S.cajaSel})&&S.cajaSel!=="todas")S.cajaSel=S.cajas[0].id;
@@ -31,10 +34,17 @@ function pintarCaja(){
   var box=document.getElementById("box");if(!box)return;
   var cajas=S.cajas,sel=S.cajaSel||"todas",h="";
   if(!cajas){h+="<div class='status err'>Falta correr el SQL nuevo en Supabase (sql/2026-10-06_5_cajas.sql) para usar las 3 cajas y los medios de pago.</div>"}
-  else h+="<div class='tabs' role='tablist' style='flex-wrap:wrap'>"+cajas.map(function(c){return "<button role='tab' data-caja='"+c.id+"' aria-selected='"+(sel===c.id)+"'>"+esc(c.nombre)+"</button>"}).join("")+"<button role='tab' data-caja='todas' aria-selected='"+(sel==="todas")+"'>Todas</button></div>";
+  else{
+   var tab=function(c){return "<button role='tab' data-caja='"+c.id+"' aria-selected='"+(sel===c.id)+"'>"+esc(c.nombre)+"</button>"};
+   h+="<div class='tabs' role='tablist' style='flex-wrap:wrap'>"+cajas.filter(function(c){return !esBilletera(c)}).map(tab).join("")+"<button role='tab' data-caja='todas' aria-selected='"+(sel==="todas")+"'>Todas</button></div>";
+   var bills=cajas.filter(esBilletera),hayTipo=cajas.some(function(c){return "tipo" in c});
+   h+="<div class='lr' style='margin:4px 0 6px'><span class='muted' style='font-family:var(--f-mono);font-size:.78rem;letter-spacing:.06em;text-transform:uppercase'>Billeteras virtuales</span>"+(hayTipo?"<button class='btn o' id='addBill' style='padding:4px 10px;min-height:0'>"+ic("plus")+" Billetera</button>":"")+"</div>"+
+    (bills.length?"<div class='tabs' role='tablist' style='flex-wrap:wrap'>"+bills.map(tab).join("")+"</div>":"<p class='muted' style='margin:0 0 12px;font-size:.9rem'>"+(hayTipo?"Todavía no hay billeteras. Agregá una con el botón.":"Para usar billeteras virtuales (Mercado Pago) falta correr en Supabase el SQL sql/2026-10-14_pagos_tarjeta_billeteras.sql.")+"</p>");
+  }
   var movsCaja=S.movs.filter(function(x){return sel==="todas"||!cajas||x.caja_id===sel});
   var sm=saldosPorMedio(movsCaja),ing=0,egr=0;MEDIOS.forEach(function(md){ing+=sm[md[0]].ing;egr+=sm[md[0]].egr});
   var cajaObj=cajas&&cajas.filter(function(c){return c.id===sel})[0];
+  if(esBilletera(cajaObj))h+=htmlExtracto(cajaObj);
   // resumen
   h+="<div class='card'><div class='lr'><h2 style='margin:0'>"+(cajaObj?esc(cajaObj.nombre):"Todas las cajas")+"</h2>"+(cajaObj?"<button class='btn o' id='renCaja' style='padding:6px 12px;min-height:0'>"+ic("pencil")+" Nombre</button>":"")+"</div>"+
    "<div class='lr' style='margin-top:10px;font-size:1.35rem;font-weight:700'><span>Saldo</span><span style='font-family:var(--f-mono);color:"+(ing-egr<0?"var(--bad)":"var(--ink)")+"'>"+money(ing-egr)+"</span></div>"+
@@ -47,6 +57,8 @@ function pintarCaja(){
    fac[x.facturado?"si":"no"]+=v});
   var bks=Object.keys(porBanco).sort(function(a,b){return porBanco[b]-porBanco[a]});
   if(bks.length)h+="<table class='t' style='margin-top:12px'><tr><th>Transferencias recibidas de</th><th>Importe</th></tr>"+bks.map(function(b){return "<tr><td style='font-family:var(--f-body)'>"+esc(b)+"</td><td>"+money(porBanco[b])+"</td></tr>"}).join("")+"</table>";
+  var tj={si:0,no:0,n:0};movsCaja.forEach(function(x){if(x.tipo!=="egreso"&&x.medio_pago==="tarjeta"){tj.n++;tj[x.facturado?"si":"no"]+=Number(x.monto)||0}});
+  if(tj.n)h+="<table class='t' style='margin-top:12px'><tr><th>Cobros con tarjeta</th><th>Importe</th></tr><tr><td style='font-family:var(--f-body)'>Facturados</td><td>"+money(tj.si)+"</td></tr><tr><td style='font-family:var(--f-body)'>Sin facturar</td><td>"+money(tj.no)+"</td></tr></table>";
   if(hayCol)h+="<div class='lr' style='margin-top:12px'><span class='muted'>Ingresos facturados</span><b>"+money(fac.si)+"</b></div><div class='lr'><span class='muted'>Ingresos sin facturar</span><b style='color:"+(fac.no?"var(--br)":"var(--ink)")+"'>"+money(fac.no)+"</b></div>";
   if(sel==="todas"&&cajas&&cajas.length)h+="<div class='tiles' style='margin:12px 0 0'>"+cajas.map(function(c){var ms=S.movs.filter(function(x){return x.caja_id===c.id}),s=ms.reduce(function(a,x){return a+(x.tipo==="egreso"?-1:1)*(Number(x.monto)||0)},0);
     return "<div class='tile' style='background:var(--card2)'><span>"+esc(c.nombre)+"</span><b>"+money(s)+"</b></div>"}).join("")+"</div>";
@@ -55,8 +67,10 @@ function pintarCaja(){
   h+="<div class='card'><h2>Nuevo movimiento</h2>"+
    (cajas?"<label for='mcaja'>Caja</label><select id='mcaja'>"+cajas.map(function(c){return "<option value='"+c.id+"'"+(c.id===(cajaObj?cajaObj.id:cajas[0].id)?" selected":"")+">"+esc(c.nombre)+"</option>"}).join("")+"</select>":"")+
    "<div class='g2'><div><label for='mtipo'>Tipo</label><select id='mtipo'><option value='ingreso'>Ingreso</option><option value='egreso'>Egreso</option></select></div>"+
-   (cajas?"<div><label for='mmedio'>Medio de pago</label><select id='mmedio'>"+MEDIOS.map(function(md){return "<option value='"+md[0]+"'>"+md[1]+"</option>"}).join("")+"</select></div>":"<div></div>")+"</div>"+
-   (cajas?"<div id='mbancoBox' class='hide'><label for='mbanco'>Banco o billetera de la transferencia</label><input id='mbanco' list='bancosLista' placeholder='Mercado Pago, Galicia, Ualá…' autocomplete='off'><datalist id='bancosLista'>"+BANCOS.map(function(b){return "<option value=\""+esc(b)+"\">"}).join("")+"</datalist></div>"+
+   (cajas?"<div><label for='mmedio'>Medio de pago</label><select id='mmedio'>"+MEDIOS.map(function(md){return "<option value='"+md[0]+"'"+(esBilletera(cajaObj)&&md[0]==="billetera"?" selected":"")+">"+md[1]+"</option>"}).join("")+"</select></div>":"<div></div>")+"</div>"+
+   (cajas?"<div id='mbancoBox' class='hide'><label for='mbanco' id='mbancoLbl'>Banco o billetera de la transferencia</label><input id='mbanco' list='bancosLista' placeholder='Mercado Pago, Galicia, Ualá…' autocomplete='off'><datalist id='bancosLista'>"+BANCOS.map(function(b){return "<option value=\""+esc(b)+"\">"}).join("")+"</datalist></div>"+
+    "<div id='mcliBox' class='hide'><label for='mcli'>Cliente</label><input id='mcli' list='mcliLista' autocomplete='off' placeholder='Elegí el cliente que paga con tarjeta'><datalist id='mcliLista'>"+(S.cajaClientes||[]).map(function(c){return "<option value=\""+esc(c.nombre)+"\">"}).join("")+"</datalist>"+
+     "<label for='mcuit'>CUIT / CUIL del cliente</label><input id='mcuit' inputmode='numeric' placeholder='20-12345678-9'></div>"+
     "<label class='lr' style='justify-content:flex-start;gap:10px;margin-top:14px;text-transform:none;letter-spacing:0;font-family:var(--f-body);font-size:1rem;color:var(--ink)'><input type='checkbox' id='mfact' style='width:24px;min-height:24px'> <span><b>Facturado</b><br><span class='muted' style='font-size:.88rem'>Marcalo si emitiste (o te dieron) factura por este movimiento</span></span></label>":"")+
    (cajas?"<label for='mfecha'>Fecha y hora</label><input id='mfecha' type='datetime-local' value='"+ahoraLocal()+"'>":"")+
    "<label for='mconcepto'>Concepto / descripción</label><input id='mconcepto' placeholder='Pago OT 000123, compra de repuestos, etc.'>"+
@@ -77,7 +91,7 @@ function pintarCaja(){
    return "<div class='card' style='padding:10px 16px'><div class='lr'><span>"+esc(x.concepto)+(x.ordenes&&x.ordenes.numero?" · OT "+String(x.ordenes.numero).padStart(6,"0"):"")+"<br><span class='muted' style='font-size:.85rem'>"+new Date(fechaMov(x)).toLocaleString("es-AR",{dateStyle:"short",timeStyle:"short"})+"</span>"+
     "<br><span class='tag' style='margin-top:4px;display:inline-block'>"+medioTxt(x.medio_pago)+"</span>"+
     (usaBanco(x.medio_pago)&&"banco" in x?" <button class='tag' data-banco='"+x.id+"' style='display:inline-block;cursor:pointer' title='Cambiar banco o billetera'>"+(x.banco?esc(x.banco):"¿Qué banco?")+"</button>":"")+
-    ("facturado" in x?" <button class='tag "+(x.facturado?"g":"w")+"' data-fact='"+x.id+"' style='display:inline-block;cursor:pointer' title='Tocá para cambiar'>"+(x.facturado?"Facturado":"Sin facturar")+"</button>":"")+(sel==="todas"&&nomCaja[x.caja_id]?" <span class='tag' style='display:inline-block'>"+esc(nomCaja[x.caja_id])+"</span>":"")+"</span>"+
+    ("facturado" in x?" <button class='tag "+(x.facturado?"g":"w")+"' data-fact='"+x.id+"' style='display:inline-block;cursor:pointer' title='Tocá para cambiar'>"+(x.facturado?"Facturado":"Sin facturar")+"</button>":"")+(x.cliente_cuit?" <span class='tag' style='display:inline-block'>CUIT "+esc(x.cliente_cuit)+"</span>":"")+(x.referencia?" <span class='tag' style='display:inline-block'>Op. "+esc(x.referencia)+"</span>":"")+(sel==="todas"&&nomCaja[x.caja_id]?" <span class='tag' style='display:inline-block'>"+esc(nomCaja[x.caja_id])+"</span>":"")+"</span>"+
     "<span class='lr' style='gap:10px'><b style='color:"+(x.tipo==="ingreso"?"var(--ok)":"var(--bad)")+";white-space:nowrap'>"+(x.tipo==="ingreso"?"+":"−")+money(x.monto)+"</b><button class='btn o icon del' data-del-mov='"+x.id+"' style='padding:4px 10px;min-height:0' aria-label='Eliminar' title='Eliminar'>"+ic("trash")+"</button></span></div></div>"
   }).join("")||vacio("wallet","No hay movimientos","No hay movimientos en este período"+(fm?" con ese medio de pago":"")+".");
   box.innerHTML=h;
@@ -86,7 +100,17 @@ function pintarCaja(){
   document.getElementById("mfmedio").onchange=function(){S.cajaMedio=this.value;pintarCaja()};
   document.getElementById("mffact").onchange=function(){S.cajaFact=this.value;pintarCaja()};
   document.getElementById("magregar").onclick=agregarMovimiento;
-  var mm=document.getElementById("mmedio");if(mm){mm.onchange=function(){document.getElementById("mbancoBox").classList.toggle("hide",!usaBanco(mm.value))};mm.onchange()}
+  var mm=document.getElementById("mmedio"),mt=document.getElementById("mtipo");
+  if(mm){mm.onchange=function(){document.getElementById("mbancoBox").classList.toggle("hide",!usaBanco(mm.value));
+    document.getElementById("mbancoLbl").textContent=mm.value==="tarjeta"?"Tarjeta o banco (Visa, Mastercard, Naranja…)":"Banco o billetera de la transferencia";
+    document.getElementById("mcliBox").classList.toggle("hide",!(mm.value==="tarjeta"&&mt.value==="ingreso"))};
+   mt.onchange=mm.onchange;mm.onchange();
+   var mc=document.getElementById("mcli");mc.oninput=function(){var c=clienteCaja(mc.value),cu=document.getElementById("mcuit");if(c&&c.dni_cuit)cu.value=c.dni_cuit}}
+  var ab=document.getElementById("addBill");if(ab)ab.onclick=async function(){
+   var n=prompt("Nombre de la billetera virtual (Ualá, Naranja X, Personal Pay…):","");if(!n||!n.trim())return;
+   var r=await sb.from("cajas").insert({taller_id:S.taller.id,nombre:n.trim(),orden:10+cajas.filter(esBilletera).length+1,tipo:"billetera"}).select().single();
+   if(r.error){alert(r.error.message);return}S.cajaSel=r.data.id;renderCaja()};
+  if(esBilletera(cajaObj))conectarExtracto(cajaObj);
   m.querySelectorAll("[data-fact]").forEach(function(b){b.onclick=async function(){
    var x=S.movs.filter(function(y){return y.id===b.dataset.fact})[0];if(!x)return;
    b.disabled=true;var r=await sb.from("movimientos_caja").update({facturado:!x.facturado}).eq("id",x.id);b.disabled=false;
@@ -113,10 +137,19 @@ async function agregarMovimiento(){
   var cj=document.getElementById("mcaja");
   if(cj){var f=document.getElementById("mfecha").value;Object.assign(data,{caja_id:cj.value,medio_pago:document.getElementById("mmedio").value,fecha:f?new Date(f).toISOString():new Date().toISOString()});
    var bn=document.getElementById("mbanco").value.trim();if(usaBanco(data.medio_pago)&&bn)data.banco=bn;
-   if(document.getElementById("mfact").checked)data.facturado=true}
+   if(document.getElementById("mfact").checked)data.facturado=true;
+   var cliTxt=document.getElementById("mcli").value.trim(),cuit=document.getElementById("mcuit").value.trim(),cliObj=null;
+   if(data.medio_pago==="tarjeta"&&data.tipo==="ingreso"){
+    cliObj=clienteCaja(cliTxt);
+    if(cliTxt&&!cliObj){say("stc","Ese cliente no está cargado. Elegilo de la lista o cargalo primero en Clientes.",true);return}
+    if(cliObj)data.cliente_id=cliObj.id;if(cuit)data.cliente_cuit=cuit;
+    if(cliObj&&!data.concepto.toLowerCase().includes(norm(cliObj.nombre)))data.concepto+=" · "+cliObj.nombre}}
   var btn=document.getElementById("magregar");btn.disabled=true;
   var r=await sb.from("movimientos_caja").insert(data);
   if(r.error&&/banco|facturado/.test(r.error.message)){btn.disabled=false;say("stc","Para guardar el banco y si está facturado falta correr el SQL nuevo en Supabase (sql/2026-10-08_modificaciones.sql).",true);return}
+  if(r.error&&/cliente_|billetera|medio_check/.test(r.error.message)){btn.disabled=false;say("stc","Para guardar el cliente y su CUIT, o usar billeteras virtuales, falta correr el SQL nuevo en Supabase (sql/2026-10-14_pagos_tarjeta_billeteras.sql).",true);return}
+  // Si el cliente no tenía CUIT cargado, se le guarda el que se escribió acá
+  if(!r.error&&cliObj&&cuit&&!cliObj.dni_cuit){await sb.from("clientes").update({dni_cuit:cuit}).eq("id",cliObj.id);cliObj.dni_cuit=cuit}
   btn.disabled=false;
   if(r.error){say("stc",r.error.message,true);return}
   if(cj&&S.cajaSel!=="todas")S.cajaSel=cj.value;
