@@ -153,7 +153,10 @@ function pintarCompra(){
    "<label for='cProv'>Proveedor</label><select id='cProv'"+(ver?" disabled":"")+"><option value=''>Elegí un proveedor…</option>"+S.provs.map(function(p){return "<option value='"+p.id+"'"+(p.id===c.proveedor_id?" selected":"")+">"+esc(p.nombre)+"</option>"}).join("")+"<option value='nuevo'>+ Proveedor nuevo…</option></select>"+
    "<div id='cProvNuevo'></div>"+
    "<div class='g2'><div><label for='cNum'>Número de comprobante</label><input id='cNum' value=\""+esc(c.numero)+"\" placeholder='A 0001-00012345'></div><div><label for='cCond'>Condición de pago</label><input id='cCond' value=\""+esc(c.condicion_pago)+"\" placeholder='Contado, cuenta corriente…'></div></div>"+
-   "<div class='g2'><div><label for='cFecha'>Fecha</label><input id='cFecha' type='date' value='"+esc(c.fecha)+"'></div><div><label for='cVenc'>Vencimiento</label><input id='cVenc' type='date' value='"+esc(c.vencimiento)+"'></div></div></div>";
+   "<div class='g2'><div><label for='cFecha'>Fecha</label><input id='cFecha' type='date' value='"+esc(c.fecha)+"'></div><div><label for='cVenc'>Vencimiento</label><input id='cVenc' type='date' value='"+esc(c.vencimiento)+"'></div></div>"+
+   "<div class='g2'><div><label for='cTfac'>Tipo de factura</label><select id='cTfac'>"+[["","Sin factura / otro"],["A","Factura A"],["B","Factura B"],["C","Factura C"]].map(function(t){return "<option value='"+t[0]+"'"+((c.tipo_factura||"")===t[0]?" selected":"")+">"+t[1]+"</option>"}).join("")+"</select></div>"+
+   "<div><label for='cIva'>IVA (crédito fiscal)</label><input id='cIva' inputmode='decimal' value=\""+(Number(c.iva)?esc(String(c.iva).replace(".",",")):"")+"\" placeholder='Solo factura A'></div></div>"+
+   "<label for='cCat'>Categoría</label><select id='cCat'>"+CATEGORIAS.map(function(k){return "<option value='"+k[0]+"'"+((c.categoria||"repuestos")===k[0]?" selected":"")+">"+k[1]+"</option>"}).join("")+"</select></div>";
   h+="<div class='card'><h2>Repuestos y productos</h2><div id='cItems'></div>"+(ver?"":"<div class='btns'><button class='btn o' id='cAddItem'>"+ic("plus")+" Agregar renglón</button></div>")+
    "<div class='lr' style='margin-top:12px'><span class='muted'>Suma de los renglones</span><span id='cSuma'></span></div>"+
    "<label for='cTotal'>Total de la factura</label><input id='cTotal' inputmode='decimal' value=\""+(c.total!=null?esc(String(c.total).replace(".",",")):"")+"\">"+
@@ -235,6 +238,8 @@ function aplicarLectura(r){
   if(r.numero)c.numero=r.numero;if(r.condicion_pago)c.condicion_pago=r.condicion_pago;
   if(/^\d{4}-\d\d-\d\d$/.test(r.fecha||""))c.fecha=r.fecha;if(/^\d{4}-\d\d-\d\d$/.test(r.vencimiento||""))c.vencimiento=r.vencimiento;
   if(Number(r.total)>0)c.total=Number(r.total);
+  c.tipo_factura=document.getElementById("cTfac").value||null;c.categoria=document.getElementById("cCat").value;var iv0=document.getElementById("cIva").value.trim();if(iv0)c.iva=numAR(iv0);
+  if(/^[ABC]$/.test(r.tipo_factura||""))c.tipo_factura=r.tipo_factura;if(Number(r.iva)>0)c.iva=Number(r.iva);
   var its=(r.items||[]).filter(function(it){return it&&it.descripcion}).map(function(it){var q=Number(it.cantidad)||1,u=Number(it.costo_unitario)||0,t=Number(it.total)||0;if(!u&&t)u=redondo(t/q);
    return {descripcion:String(it.descripcion),marca:it.marca||"",codigo:it.codigo||"",cantidad:q,costo_unitario:u,total:redondo(q*u)}});
   if(its.length)c.items=its;
@@ -246,6 +251,13 @@ function aplicarLectura(r){
   if(prov)c.proveedor_id=prov.id;
   else if(r.proveedor)S.compraProvNuevo={nombre:r.proveedor,cuit:r.cuit,telefono:r.telefono,email:r.email,direccion:r.direccion};
   pintarCompra();
+}
+var FALTA_SQL_CONTA="Para guardar el tipo de factura, el IVA y la categoría falta correr el SQL nuevo en Supabase (sql/2026-10-14_2_contabilidad_venta_autos.sql).";
+// Tipo de factura, IVA (si es A y se deja vacío, se calcula al 21%) y categoría de la factura de compra
+function datosFiscalesCompra(total){
+  var t=document.getElementById("cTfac").value||null,iv=document.getElementById("cIva").value.trim(),iva=iv?numAR(iv):(t==="A"?ivaIncluido(total):0);
+  if(!(iva>=0)||iva>(Number(total)||0))return "Revisá el importe del IVA.";
+  return {tipo_factura:t,iva:redondo(iva),categoria:document.getElementById("cCat").value||"repuestos"};
 }
 // Busca el repuesto en el stock por código o por nombre
 function normCodigo(s){return norm(s).replace(/[^a-z0-9]/g,"")}
@@ -260,8 +272,11 @@ async function guardarCompra(){
    var d={numero:document.getElementById("cNum").value.trim()||null,condicion_pago:document.getElementById("cCond").value.trim()||null,
     fecha:document.getElementById("cFecha").value||hoyISO(),vencimiento:document.getElementById("cVenc").value||null,observaciones:document.getElementById("cObs").value.trim()||null};
    var tv=document.getElementById("cTotal").value.trim();if(tv){d.total=numAR(tv);if(!(d.total>=0)){say("cSt","Revisá el total.",true);return}}
+   var fx=datosFiscalesCompra(d.total!=null?d.total:c.total);if(typeof fx==="string"){say("cSt",fx,true);return}
+   var cambiaFx=fx.tipo_factura!==(c.tipo_factura||null)||fx.iva!==(Number(c.iva)||0)||fx.categoria!==(c.categoria||"repuestos");
+   if(cambiaFx)Object.assign(d,fx);
    bt.disabled=true;var ru=await sb.from("compras").update(d).eq("id",c.id);bt.disabled=false;
-   if(ru.error){say("cSt",ru.error.message,true);return}
+   if(ru.error){say("cSt",/tipo_factura|iva|categoria/.test(ru.error.message)?FALTA_SQL_CONTA:ru.error.message,true);return}
    irProv("provDetalle",{provSel:c.proveedor_id});return;
   }
   leerItemsCompra();
@@ -279,6 +294,7 @@ async function guardarCompra(){
      email:document.getElementById("npEmail").value||null,direccion:document.getElementById("npDir").value||null}).select().single();
     if(rn.error)throw rn.error.message;provId=rn.data.id;S.compraProvNuevo=null;
    }
+   var fx=datosFiscalesCompra(total);if(typeof fx==="string")throw fx;
    var datos={taller_id:S.taller.id,proveedor_id:provId,numero:document.getElementById("cNum").value.trim()||null,fecha:document.getElementById("cFecha").value||hoyISO(),
     vencimiento:document.getElementById("cVenc").value||null,condicion_pago:document.getElementById("cCond").value.trim()||null,total:redondo(total),observaciones:document.getElementById("cObs").value.trim()||null};
    var f=S.compraArchivo;
@@ -290,8 +306,10 @@ async function guardarCompra(){
     if(up.error)throw /bucket/i.test(up.error.message)?FALTA_SQL_PROV:"No se pudo subir el comprobante: "+up.error.message;
     datos.comprobante_ruta=ruta;datos.comprobante_nombre=f.name;
    }
+   // Tipo de factura, IVA y categoría: solo si se cargaron (así funciona aunque falte el SQL nuevo)
+   if(fx.tipo_factura||fx.iva||fx.categoria!=="repuestos")Object.assign(datos,fx);
    say("cSt","Guardando…");
-   var rc=await sb.from("compras").insert(datos).select().single();if(rc.error)throw rc.error.message;
+   var rc=await sb.from("compras").insert(datos).select().single();if(rc.error)throw /tipo_factura|iva|categoria/.test(rc.error.message)?FALTA_SQL_CONTA:rc.error.message;
    var stock=document.getElementById("cStock").checked,actualizados=0,nuevos=0;
    if(stock&&its.length){
     var rr=await sb.from("repuestos").select("*");var reps=rr.data||[];
@@ -355,7 +373,9 @@ async function renderPagoForm(){
    var movId=null;
    if(caja){
     var hora=new Date(),f=new Date(fecha+"T"+String(hora.getHours()).padStart(2,"0")+":"+String(hora.getMinutes()).padStart(2,"0")+":00");
-    var rm=await sb.from("movimientos_caja").insert({taller_id:S.taller.id,tipo:"egreso",concepto:"Pago a "+rp.data.nombre+(obs?" ("+obs+")":""),monto:imp,caja_id:caja,medio_pago:medio,fecha:f.toISOString()}).select().single();
+    var mov={taller_id:S.taller.id,tipo:"egreso",concepto:"Pago a "+rp.data.nombre+(obs?" ("+obs+")":""),monto:imp,caja_id:caja,medio_pago:medio,fecha:f.toISOString(),categoria:"repuestos"};
+    var rm=await sb.from("movimientos_caja").insert(mov).select().single();
+    if(rm.error&&/categoria/.test(rm.error.message)){delete mov.categoria;rm=await sb.from("movimientos_caja").insert(mov).select().single()}
     if(rm.error){bt.disabled=false;say("pgSt","No se pudo registrar en la caja: "+rm.error.message,true);return}
     movId=rm.data.id;
    }

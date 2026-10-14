@@ -89,7 +89,7 @@ a.link,button.link{color:var(--ac);word-break:break-all}
 details summary{cursor:pointer}
 .ic{width:1.2em;height:1.2em;flex:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;vertical-align:-.22em}
 /* menú inferior */
-nav{position:fixed;left:0;right:0;bottom:0;top:auto;z-index:25;display:grid;grid-template-columns:repeat(7,1fr);gap:0;padding:6px calc(4px + env(safe-area-inset-right)) calc(6px + env(safe-area-inset-bottom)) calc(4px + env(safe-area-inset-left));background:rgba(8,8,8,.96);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-top:1px solid var(--line);border-bottom:0;overflow:visible}
+nav{position:fixed;left:0;right:0;bottom:0;top:auto;z-index:25;display:grid;grid-template-columns:repeat(8,1fr);gap:0;padding:6px calc(4px + env(safe-area-inset-right)) calc(6px + env(safe-area-inset-bottom)) calc(4px + env(safe-area-inset-left));background:rgba(8,8,8,.96);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-top:1px solid var(--line);border-bottom:0;overflow:visible}
 nav.hide{display:none}
 nav button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-height:56px;padding:6px 2px;border-radius:12px;font-size:.78rem;letter-spacing:.04em}
 nav button .ic{width:24px;height:24px}
@@ -97,6 +97,7 @@ nav button[aria-current="true"]{background:transparent;color:var(--ac)}
 nav button[aria-current="true"] .ic{filter:drop-shadow(0 0 8px rgba(255,106,19,.45))}
 nav button .sh{display:none}
 @media (max-width:480px){nav button{font-size:.7rem;letter-spacing:.02em;padding:6px 0}nav button .lg{display:none}nav button .sh{display:inline}}
+@media (max-width:420px){nav button{font-size:.6rem;letter-spacing:0}}
 @media (min-width:900px){nav{max-width:760px;margin:0 auto;border-radius:18px 18px 0 0;border:1px solid var(--line);border-bottom:0}}
 /* botones solo ícono (eliminar) */
 .btn.icon{width:44px;min-width:44px;padding:0!important;flex:none}
@@ -153,6 +154,16 @@ input[type=search]{padding-left:40px;background-image:url("data:image/svg+xml,%3
 .tabs button{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;min-height:44px;border:0;border-radius:9px;background:none;color:var(--mute);font-family:var(--f-head);font-weight:700;font-size:1rem;letter-spacing:.05em;text-transform:uppercase}
 .tabs button[aria-selected="true"]{background:var(--ac);color:var(--on-ac)}
 .g2{display:grid;grid-template-columns:1fr 1fr;gap:0 10px;align-items:end}.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:0 10px;align-items:end}
+.torta{display:grid;grid-template-columns:minmax(150px,200px) 1fr;gap:16px;align-items:center}.torta svg{width:100%;height:auto}.torta .tz{transition:opacity .15s}.torta svg:hover .tz{opacity:.55}.torta svg .tz:hover{opacity:1}
+@media (max-width:520px){.torta{grid-template-columns:1fr}.torta svg{max-width:200px;margin:0 auto;display:block}}
+table.imp{min-width:640px}table.imp td{padding:3px 2px;vertical-align:top}table.imp input{min-height:38px;padding:6px 8px;font-size:.9rem;color:inherit;background:transparent;border-color:var(--line2)}
+table.imp tr.vigente td{background:rgba(62,207,122,.13);color:var(--ok)}table.imp tr.vigente input{border-color:rgba(62,207,122,.45)}table.imp tr.vencido td{color:var(--bad)}table.imp tr.vencido input{color:var(--bad)}
+.impEst{display:block;font-family:var(--f-mono);font-size:.7rem;letter-spacing:.06em;text-transform:uppercase;text-align:left;padding:2px 2px 0}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.autoCard{display:flex;gap:12px;align-items:center;width:100%;text-align:left;color:var(--ink);font:inherit;cursor:pointer}
+.autoFoto{width:76px;height:60px;border-radius:10px;background:var(--card2);display:flex;align-items:center;justify-content:center;overflow:hidden;flex:none;color:var(--mute)}.autoFoto img{width:100%;height:100%;object-fit:cover}
+.autoFotos{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px;margin-bottom:8px}.autoMini{position:relative;aspect-ratio:4/3;border-radius:10px;overflow:hidden;background:var(--card2);display:flex;align-items:center;justify-content:center}.autoMini img{width:100%;height:100%;object-fit:cover}
+.autoMini button{position:absolute;top:4px;right:4px;background:rgba(0,0,0,.7);border:0;border-radius:8px;color:#fff;padding:5px;min-height:0;display:flex}.autoMini button .ic{width:16px;height:16px}
 table.t{width:100%;border-collapse:collapse;font-size:.9rem}table.t th,table.t td{padding:6px 4px;border-top:1px solid var(--line);text-align:right}table.t td{font-family:var(--f-mono);font-size:.82rem}table.t th:first-child,table.t td:first-child{text-align:left}
 </style>
 </head>
@@ -179,6 +190,8 @@ table.t{width:100%;border-collapse:collapse;font-size:.9rem}table.t th,table.t t
 <script src="js/turnos.js"></script>
 <script src="js/pagos.js"></script>
 <script src="js/billeteras.js"></script>
+<script src="js/contabilidad.js"></script>
+<script src="js/ventaautos.js"></script>
 <script>
 var CFG=window.SCOTTO_CONFIG;
 var sb=window.supabase.createClient(CFG.SUPABASE_URL,CFG.SUPABASE_ANON_KEY);
@@ -240,7 +253,7 @@ async function cargarTalleres(){
   document.getElementById("salir").onclick=function(){sb.auth.signOut()};
   pintarMarca();
   nv.classList.remove("hide");
-  nv.innerHTML=[["panel","Panel","grid"],["clientes","Clientes","users"],["ordenes","Órdenes","clipboard"],["stock","Stock","package"],["proveedores","Proveedores","receipt","Proveed."],["turnos","Turnos","calendar"],["mas","Más","menu"]].map(function(x){return "<button data-v='"+x[0]+"' aria-label='"+x[1]+"'>"+ic(x[2])+(x[3]?"<span class='lg'>"+x[1]+"</span><span class='sh' aria-hidden='true'>"+x[3]+"</span>":"<span>"+x[1]+"</span>")+"</button>"}).join("");
+  nv.innerHTML=[["panel","Panel","grid"],["clientes","Clientes","users"],["ordenes","Órdenes","clipboard"],["stock","Stock","package"],["proveedores","Proveedores","receipt","Proveed."],["turnos","Turnos","calendar"],["autos","Venta autos","car","Autos"],["mas","Más","menu"]].map(function(x){return "<button data-v='"+x[0]+"' aria-label='"+x[1]+"'>"+ic(x[2])+(x[3]?"<span class='lg'>"+x[1]+"</span><span class='sh' aria-hidden='true'>"+x[3]+"</span>":"<span>"+x[1]+"</span>")+"</button>"}).join("");
   nv.querySelectorAll("button").forEach(function(b){b.onclick=function(){S.vista=b.dataset.v;S.orden=null;route()}});
   route();
 }
@@ -294,16 +307,16 @@ function renderCrearTaller(){
 
 /* ---------------- router ---------------- */
 /* Pantallas que vienen con el plan Plata (o el Oro, que incluye todo) */
-var VISTAS_PLATA={caja:1,reportes:1,proveedores:1,provForm:1,provDetalle:1,compraForm:1,pagoForm:1,provIA:1,neuForm:1,aliForm:1,listas:1,listaIA:1};
+var VISTAS_PLATA={caja:1,reportes:1,proveedores:1,provForm:1,provDetalle:1,compraForm:1,pagoForm:1,provIA:1,neuForm:1,aliForm:1,listas:1,listaIA:1,contabilidad:1,autos:1,autoForm:1};
 function renderBloqueoPlata(){
   m.innerHTML="<h1>Función del plan Plata</h1>"+
-   "<div class='card'><p class='muted' style='margin-top:0'>Las cajas, los reportes, los proveedores, las listas de precio y los neumáticos vienen con el plan <b>Plata</b>. Todo lo demás del taller sigue funcionando igual.</p>"+
+   "<div class='card'><p class='muted' style='margin-top:0'>Las cajas, la contabilidad, los reportes, los proveedores, las listas de precio, la venta de autos y los neumáticos vienen con el plan <b>Plata</b>. Todo lo demás del taller sigue funcionando igual.</p>"+
    "<div class='btns'>"+(esDueno()?"<button class='btn' id='irPlan'>Ver los planes</button>":"")+"<button class='btn o' id='irPanel'>Volver</button></div></div>";
   var b=document.getElementById("irPlan");if(b)b.onclick=function(){S.vista="plan";route()};
   document.getElementById("irPanel").onclick=function(){S.vista="panel";route()};
 }
 function route(){
-  if(!esDueno()&&(S.vista==="caja"||S.vista==="plan"||S.vista==="reportes"))S.vista="panel";
+  if(!esDueno()&&(S.vista==="caja"||S.vista==="plan"||S.vista==="reportes"||S.vista==="contabilidad"))S.vista="panel";
   if(VISTAS_PLATA[S.vista]&&nivelPlan()<1){renderBloqueoPlata();return}
   if(S.vista==="mas")renderMas();
   else if(S.vista==="reportes")renderReportes();
@@ -333,6 +346,7 @@ async function renderPanel(){
   h+=r.data.length?r.data.map(function(o){var cls=o.estado==="Listo"||o.estado==="Entregado"?"g":o.estado==="En reparación"?"w":"";
     return "<div class='lr' style='border-top:1px solid var(--line);padding:8px 0'><span>OT "+String(o.numero).padStart(6,"0")+" · "+esc(o.clientes?o.clientes.nombre:"")+"</span><span class='tag "+cls+"'>"+esc(o.estado)+"</span></div>"}).join(""):"<p class='muted' style='margin:0'>Todavía no hay órdenes. Tocá <b>Nueva orden</b> para cargar la primera.</p>";
   h+="</div><div class='btns'><button class='btn' id='ir'>Nueva orden</button><button class='btn o' id='irVeh'>"+ic("search")+" Buscar "+equipoLabel().toLowerCase()+"</button><button class='btn o' id='irPat'>"+ic("camera")+" Buscar por "+patenteLabel().toLowerCase()+"</button></div>";
+  if(esDueno()&&nivelPlan()>=1)h+="<div class='card' id='tortaBox' style='margin-top:16px'><h2>Gastos del mes por categoría</h2><span class='muted'>Buscando…</span></div>";
   h+="<div class='card' id='turHoyBox' style='margin-top:16px'><h2>Turnos de hoy</h2><span class='muted'>Buscando…</span></div>";
   h+="<div class='card' id='secBox' style='margin-top:16px'><h2>Órdenes vigentes</h2><span class='muted'>Buscando…</span></div>";
   h+="<div class='card' id='vencBox' style='margin-top:16px'><h2>Services por vencer</h2><span class='muted'>Buscando…</span></div>";
@@ -341,6 +355,7 @@ async function renderPanel(){
   document.getElementById("ir").onclick=function(){S.orden={estado:"Recibido"};S.vista="ordenForm";route()};
   document.getElementById("irPat").onclick=function(){S.vista="patente";route()};
   document.getElementById("irVeh").onclick=function(){S.vista="vehiculos";route()};
+  cargarTortaPanel();
   cargarTurnosHoyPanel();
   cargarSectoresPanel();
   cargarServicesPorVencer();
@@ -1271,7 +1286,7 @@ async function ajustarStock(id,delta){
 
 /* ---------------- menú Más ---------------- */
 function renderMas(){
-  var items=(esDueno()?[["caja","Cajas","wallet"],["articulos","Artículos","package"],["listas","Listas de precio","tag"],["reportes","Reportes","chart"],["plan","Mi Plan","crown"],["config","Configuración","sliders"]]:[["articulos","Artículos","package"],["listas","Listas de precio","tag"],["config","Configuración","sliders"]]);
+  var items=(esDueno()?[["caja","Cajas","wallet"],["contabilidad","Contabilidad","chart"],["articulos","Artículos","package"],["listas","Listas de precio","tag"],["reportes","Reportes","chart"],["plan","Mi Plan","crown"],["config","Configuración","sliders"]]:[["articulos","Artículos","package"],["listas","Listas de precio","tag"],["config","Configuración","sliders"]]);
   m.innerHTML="<h1>Más</h1><div style='height:14px'></div>"+items.map(function(x){var trabado=VISTAS_PLATA[x[0]]&&nivelPlan()<1;
     return "<button class='fila' data-v='"+x[0]+"'>"+ic(x[2])+"<span>"+x[1]+(trabado?" <span class='tag plata'>PLATA</span>":"")+"</span>"+ic("chevron")+"</button>"}).join("")+
    "<button class='fila' data-v='patente'>"+ic("camera")+"<span>Buscar por "+patenteLabel().toLowerCase()+"</span>"+ic("chevron")+"</button>";
