@@ -31,6 +31,8 @@ async function renderPresupuestos(){
   var r=await sb.from("presupuestos").select("*,ordenes(id,numero,creado,estado,trabajos,diagnostico,motivo,clientes(nombre),equipos(nombre,marca,modelo,matricula_patente))").order("creado",{ascending:false});
   if(r.error){document.getElementById("box").innerHTML=esc(r.error.message);return}
   var lista=(r.data||[]).filter(function(p){return p.ordenes});
+  var pag=await pagadoPorPresupuesto(lista.map(function(p){return p.id}))||{};
+  if(!document.getElementById("box"))return;
   var h=buscadorHtml("Buscar por N°, cliente, "+equipoLabel().toLowerCase()+" o trabajo",S.qPresu)+
    "<select id='fpresu' aria-label='Filtrar por estado' style='margin-bottom:12px'><option value=''>Todos los estados</option>"+ESTADOS_PRESU.map(function(e){return "<option"+(e===S.fPresu?" selected":"")+">"+e+"</option>"}).join("")+"</select>";
   var tot={};
@@ -44,7 +46,8 @@ async function renderPresupuestos(){
    return "<div class='card' data-q=\""+esc(q)+"\" data-estado=\""+esc(est)+"\"><button class='item' data-presu-o='"+o.id+"'><span><b>N° "+String(o.numero).padStart(6,"0")+"</b> · "+fechaAR(p.creado||o.creado)+"<br>"+
     "<span>"+esc(o.clientes?o.clientes.nombre:"Sin cliente")+"</span>"+(eq?" · <span class='muted'>"+esc(vehTitulo(eq))+(eq.matricula_patente?" "+esc(eq.matricula_patente):"")+"</span>":"")+"</span><span class='tag "+clsEstadoPresu(est)+"'>"+esc(est)+"</span></button>"+
     (trabajos.length?"<div class='muted' style='margin-top:6px;font-size:.92rem'>"+esc(trabajos.join(" · "))+"</div>":"")+
-    "<div class='g3' style='margin-top:8px;font-size:.88rem'><div><span class='muted'>Repuestos</span><br><b>"+plata(st.repuestos)+"</b></div><div><span class='muted'>Mano de obra</span><br><b>"+plata(st.mano)+"</b></div><div><span class='muted'>Total</span><br><b style='color:var(--ac)'>"+plata(st.total)+"</b></div></div></div>"}).join("")||vacio("receipt","Todavía no hay presupuestos","Se arman desde cada orden con el botón Presupuesto.");
+    "<div class='g3' style='margin-top:8px;font-size:.88rem'><div><span class='muted'>Repuestos</span><br><b>"+plata(st.repuestos)+"</b></div><div><span class='muted'>Mano de obra</span><br><b>"+plata(st.mano)+"</b></div><div><span class='muted'>Total</span><br><b style='color:var(--ac)'>"+plata(st.total)+"</b></div></div>"+saldoPresuHtml(st.total,pag[p.id])+
+    "<div class='btns' style='margin-top:8px'><button class='btn o' data-pago-presu='"+p.id+"' style='padding:6px 12px;min-height:0'>"+ic("wallet")+" Pago a cuenta</button></div></div>"}).join("")||vacio("receipt","Todavía no hay presupuestos","Se arman desde cada orden con el botón Presupuesto.");
   h+="<p id='sinres' class='muted hide'>No hay presupuestos que coincidan.</p>";
   var resumen=ESTADOS_PRESU.filter(function(e){return tot[e]}).map(function(e){return "<div class='tile'><span>"+e+"</span><b>"+pesos(tot[e])+"</b></div>"}).join("");
   if(resumen)h="<div class='tiles'>"+resumen+"</div>"+h;
@@ -53,6 +56,7 @@ async function renderPresupuestos(){
   function aplicar(){S.qPresu=bp.value;S.fPresu=fp.value;filtrarLista(bp.value,fp.value?function(el){return el.dataset.estado===fp.value}:null)}
   bp.oninput=aplicar;fp.onchange=aplicar;aplicar();
   m.querySelectorAll("[data-presu-o]").forEach(function(b){b.onclick=function(){S.volverPresu="presupuestos";abrirPresupuesto(b.dataset.presuO)}});
+  m.querySelectorAll("[data-pago-presu]").forEach(function(b){b.onclick=function(){abrirPagoACuenta(b.dataset.pagoPresu,"presupuestos")}});
 }
 
 /* ---------- sector, facturación y factura en la orden ---------- */

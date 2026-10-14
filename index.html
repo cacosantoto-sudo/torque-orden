@@ -177,6 +177,8 @@ table.t{width:100%;border-collapse:collapse;font-size:.9rem}table.t th,table.t t
 <script src="js/proveedores-ia.js"></script>
 <script src="js/listas.js"></script>
 <script src="js/turnos.js"></script>
+<script src="js/pagos.js"></script>
+<script src="js/billeteras.js"></script>
 <script>
 var CFG=window.SCOTTO_CONFIG;
 var sb=window.supabase.createClient(CFG.SUPABASE_URL,CFG.SUPABASE_ANON_KEY);
@@ -401,7 +403,7 @@ async function renderClientes(){
    var eq=(c.equipos||[]).map(function(e){var mot=usaMotorEnFicha()?"":(e.motores||[]).map(function(mo){return "<div class='lr' style='margin-top:6px'><span class='muted'>"+esc([mo.marca,mo.modelo].filter(Boolean).join(" "))+" · "+medidorLabel().toLowerCase()+": "+esc(mo.medidor||0)+"</span><span><button class='btn o' data-qr='"+mo.qr_token+"' style='padding:4px 10px;min-height:0'>Ver QR</button> <button class='btn o icon del' data-del-motor='"+mo.id+"' style='padding:4px 10px;min-height:0' aria-label='Eliminar' title='Eliminar'>"+ic("trash")+"</button></span></div>"}).join("")||(usaMotorEnFicha()?"":"<span class='muted'>Sin motor cargado.</span>");
     return "<div style='margin-top:8px;border-top:1px solid var(--line);padding-top:4px'><div class='lr'><button class='link' data-ficha='"+e.id+"' style='background:none;border:0;padding:8px 0;min-height:44px;font-weight:700;text-align:left;color:var(--ac)'>"+esc(vehTitulo(e))+(e.matricula_patente?" "+plateHtml(e.matricula_patente,"sm"):"")+" ›"+(vehDetalle(e)?"<br><span class='muted' style='font-weight:400'>"+esc(vehDetalle(e))+"</span>":"")+"</button><button class='btn o icon del' data-del-equipo='"+e.id+"' style='padding:4px 10px;min-height:0' aria-label='Eliminar "+equipoLabel().toLowerCase()+"' title='Eliminar "+equipoLabel().toLowerCase()+"'>"+ic("trash")+"</button></div>"+mot+(usaMotorEnFicha()?"":"<button class='btn o' data-motor='"+e.id+"' style='margin-top:6px;padding:6px 12px;min-height:0'>+ Motor</button> <button class='btn o' data-patente='"+e.id+"' data-actual=\""+esc(e.matricula_patente||"")+"\" style='margin-top:6px;padding:6px 12px;min-height:0'>"+patenteLabel()+"</button>")+"</div>"}).join("");
    var q=norm([c.nombre,c.telefono,String(c.telefono||"").replace(/[^0-9]/g,""),c.email,c.dni_cuit,c.direccion,c.localidad].concat((c.equipos||[]).map(function(e){return vehBusqueda(e,null)})).join(" "));
-   return "<div class='card' data-q=\""+esc(q)+"\"><div class='lr'><b>"+esc(c.nombre)+"</b><span style='display:flex;gap:6px'><button class='btn o icon' data-edit-cliente='"+c.id+"' style='padding:6px 12px;min-height:0' aria-label='Editar datos' title='Editar datos'>"+ic("pencil")+"</button><button class='btn o icon del' data-del-cliente='"+c.id+"' style='padding:6px 12px;min-height:0' aria-label='Eliminar' title='Eliminar'>"+ic("trash")+"</button></span></div><span class='muted'>"+esc(datosClienteTxt(c))+"</span>"+eq+"<div style='margin-top:8px'><button class='btn o' data-equipo='"+c.id+"' style='padding:6px 12px;min-height:0'>"+ic("plus")+" Agregar "+equipoLabel().toLowerCase()+"</button></div></div>"
+   return "<div class='card' data-q=\""+esc(q)+"\"><div class='lr'><b>"+esc(c.nombre)+"</b><span style='display:flex;gap:6px'><button class='btn o icon' data-edit-cliente='"+c.id+"' style='padding:6px 12px;min-height:0' aria-label='Editar datos' title='Editar datos'>"+ic("pencil")+"</button><button class='btn o icon del' data-del-cliente='"+c.id+"' style='padding:6px 12px;min-height:0' aria-label='Eliminar' title='Eliminar'>"+ic("trash")+"</button></span></div><span class='muted'>"+esc(datosClienteTxt(c))+"</span>"+eq+"<div style='margin-top:8px;display:flex;gap:8px;flex-wrap:wrap'><button class='btn o' data-equipo='"+c.id+"' style='padding:6px 12px;min-height:0'>"+ic("plus")+" Agregar "+equipoLabel().toLowerCase()+"</button><button class='btn o' data-presu-cli='"+c.id+"' style='padding:6px 12px;min-height:0'>"+ic("receipt")+" Presupuestos y pagos</button></div></div>"
   }).join("");
   if(!S.clientes.length)h+=vacio("users","Todavía no hay clientes","Cargá el primero con el formulario de arriba: nombre y teléfono alcanzan.");
   h+="<p id='sinres' class='muted hide'>No hay clientes que coincidan con la búsqueda.</p>";
@@ -415,6 +417,7 @@ async function renderClientes(){
    if(r.error){say("stc",r.error.message,true);return}
    if(confirm("Cliente agregado. ¿Querés cargarle "+(equipoFem()?"una ":"un ")+equipoLabel().toLowerCase()+" ahora?"))abrirVehiculoForm(null,r.data.id,"clientes");else renderClientes()};
   m.querySelectorAll("[data-equipo]").forEach(function(b){b.onclick=function(){nuevoEquipo(b.dataset.equipo)}});
+  m.querySelectorAll("[data-presu-cli]").forEach(function(b){b.onclick=function(){abrirPresuCliente(b.dataset.presuCli)}});
   m.querySelectorAll("[data-ficha]").forEach(function(b){b.onclick=function(){abrirFicha(b.dataset.ficha)}});
   m.querySelectorAll("[data-patente]").forEach(function(b){b.onclick=async function(){if(await editarPatente(b.dataset.patente,b.dataset.actual))renderClientes()}});
   document.getElementById("cPat").onclick=function(){S.vista="patente";route()};
@@ -925,6 +928,7 @@ function pintarPresu(){
     "<button class='btn o' id='pdf'>"+ic("download")+" PDF para el cliente</button>"+
     "<button class='btn o' id='wa'>"+ic("message")+" Enviar por WhatsApp</button>"+
     "<button class='btn o' id='copiarMsg'>Copiar mensaje</button>"+
+    (S.presu.id?"<button class='btn o' id='pagoCuenta'>"+ic("wallet")+" Pago a cuenta</button>":"")+
     (S.taller.alias_pago?"<button class='btn o' id='copiarAlias'>Copiar alias</button>":"")+
     (est==="Pendiente"?"<button class='btn' id='aprobar' style='background:var(--ok)'>Aprobar presupuesto</button>":"<span class='tag "+clsEstadoPresu(est)+"' style='align-self:center'>"+esc(est)+"</span>")+
     "<button class='btn o' id='back'>Volver</button>"+
@@ -961,6 +965,7 @@ function pintarPresu(){
   document.getElementById("presuEstado").onchange=function(){S.presu.estado=this.value};
   var apBtn=document.getElementById("aprobar");if(apBtn)apBtn.onclick=aprobarPresupuesto;
   var delBtn=document.getElementById("delPresu");if(delBtn)delBtn.onclick=eliminarPresupuesto;
+  var pcBtn=document.getElementById("pagoCuenta");if(pcBtn)pcBtn.onclick=async function(){var g=await guardarPresupuesto();if(g)abrirPagoACuenta(g.id,"presuForm")};
   conectarArticulos(box);
 }
 async function eliminarPresupuesto(){
