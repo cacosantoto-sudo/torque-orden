@@ -37,6 +37,8 @@ Devolvé SOLO un objeto JSON, sin texto antes ni después, con esta forma exacta
   "vencimiento": "AAAA-MM-DD o null",
   "condicion_pago": "contado, cuenta corriente, 30 días, etc. o null",
   "total": 0,
+  "tipo_factura": "A, B o C según la letra del comprobante, o null si no es factura",
+  "iva": 0,
   "items": [
     {"descripcion": "", "marca": null, "codigo": null, "cantidad": 1, "costo_unitario": 0, "total": 0}
   ]
@@ -46,6 +48,7 @@ Reglas:
 - Los importes van como números con punto decimal (12345.67), sin símbolo $ ni separador de miles.
 - En los ítems poné el precio unitario y el total de la línea tal como figuran (si el comprobante discrimina IVA, usá los importes de la línea como aparecen).
 - "total" es el importe total final del comprobante.
+- "iva" es la suma del IVA discriminado en el comprobante (todas las alícuotas); si no discrimina IVA, poné 0.
 - Si un dato no figura o no se lee con certeza, poné null. No inventes nada.
 - Las fechas del comprobante están en formato argentino (día/mes/año).`;
 
