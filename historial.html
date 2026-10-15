@@ -24,7 +24,8 @@ a.link{color:var(--ac);text-decoration:none;font-weight:600}
 <script>
 var CFG=window.SCOTTO_CONFIG;
 var sb=window.supabase.createClient(CFG.SUPABASE_URL,CFG.SUPABASE_ANON_KEY);
-function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
+function urlWeb(u){u=String(u||"").trim();return /^https?:\/\//i.test(u)?u:""}
+function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
 (async function(){
   var token=new URLSearchParams(location.search).get("token");
   var m=document.getElementById("m");
@@ -37,7 +38,7 @@ function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return
   if(d.telefono)contacto.push("📞 "+esc(d.telefono));
   if(d.direccion)contacto.push("📍 "+esc(d.direccion));
   if(d.instagram)contacto.push("<a class='link' href='https://instagram.com/"+esc(d.instagram)+"' target='_blank'>@"+esc(d.instagram)+"</a>");
-  if(d.maps_url)contacto.push("<a class='link' href='"+esc(d.maps_url)+"' target='_blank'>Cómo llegar</a>");
+  if(urlWeb(d.maps_url))contacto.push("<a class='link' href='"+esc(urlWeb(d.maps_url))+"' target='_blank'>Cómo llegar</a>");
   if(contacto.length)h+="<div class='card'>"+contacto.join("<br>")+"</div>";
   h+="<div class='card'><b>"+esc(d.motor)+"</b><br><span class='muted'>"+esc(d.medidor||0)+"</span></div>";
   h+="<div class='card'><h2 style='margin:0 0 6px;font-size:1.05rem'>Servicios realizados</h2>";

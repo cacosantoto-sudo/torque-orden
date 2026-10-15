@@ -43,7 +43,7 @@ body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.4 "Barlow",syste
 <script>
 var CFG=window.SCOTTO_CONFIG;
 var sb=window.supabase.createClient(CFG.SUPABASE_URL,CFG.SUPABASE_ANON_KEY);
-function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
+function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
 function fecha(f){return f?new Date(String(f).slice(0,10)+"T12:00:00").toLocaleDateString("es-AR",{day:"2-digit",month:"2-digit",year:"numeric"}):""}
 // El próximo service que se muestra: el de aceite; si no hay, el más cercano de los otros
 function proximo(mants){

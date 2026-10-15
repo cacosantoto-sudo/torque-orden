@@ -62,7 +62,8 @@ nav.idx a{font:600 .8rem/1 "Barlow",sans-serif;text-transform:uppercase;letter-s
 <script>
 var CFG=window.SCOTTO_CONFIG;
 var sb=window.supabase.createClient(CFG.SUPABASE_URL,CFG.SUPABASE_ANON_KEY);
-function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
+function urlWeb(u){u=String(u||"").trim();return /^https?:\/\//i.test(u)?u:""}
+function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
 var NAUT=false;
 function km(n){return n==null||n===""?"":Number(n).toLocaleString("es-AR")+(NAUT?" h":" km")}
 function fecha(f){if(!f)return "";var d=String(f).length===10?new Date(f+"T12:00:00"):new Date(f);return isNaN(d)?String(f):d.toLocaleDateString("es-AR")}
@@ -170,7 +171,7 @@ function detalle(x){
   // contacto
   var c=[];
   telefonosDe(t.telefono).forEach(function(n){c.push("📱 <a href='tel:"+esc(n.replace(/[^0-9+]/g,""))+"'>"+esc(n)+"</a>")});
-  if(t.direccion)c.push("📍 "+esc(t.direccion)+(t.maps_url?" · <a href='"+esc(t.maps_url)+"' target='_blank' rel='noopener'>Cómo llegar</a>":""));
+  if(t.direccion)c.push("📍 "+esc(t.direccion)+(urlWeb(t.maps_url)?" · <a href='"+esc(urlWeb(t.maps_url))+"' target='_blank' rel='noopener'>Cómo llegar</a>":""));
   if(instagramDe(t.instagram))c.push("📷 <a href='https://instagram.com/"+esc(instagramDe(t.instagram))+"' target='_blank' rel='noopener'>@"+esc(instagramDe(t.instagram))+"</a>");
   if(c.length)h+="<div class='card contacto'><h2>"+esc(t.nombre)+"</h2>"+c.join("<br>")+"</div>";
   h+="<p class='pie'>Libro de mantenimiento digital · Torque &amp; Orden</p></main>";
