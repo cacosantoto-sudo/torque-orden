@@ -215,7 +215,7 @@ function rubroTaller(){return S.taller&&S.taller.rubro||"nautica"}
 function medidorLabel(){return rubroTaller()==="nautica"?"Horas de motor":"Kilómetros"}
 function equipoLabel(){var r=rubroTaller();return r==="motos"?"Moto":r==="autos"?"Auto":"Embarcación"}
 function equipoFem(){return rubroTaller()!=="autos"}
-// Lo que es solo de autos (venta de autos, alineación) no aparece en talleres de motos ni de lanchas
+// Lo que es solo de autos (alineación, ejemplos de autos) no aparece en talleres de motos ni de lanchas
 function esRubroAutos(){return rubroTaller()==="autos"}
 
 /* ---------------- arranque y sesión ---------------- */
@@ -256,7 +256,7 @@ async function cargarTalleres(){
   document.getElementById("salir").onclick=function(){sb.auth.signOut()};
   pintarMarca();
   nv.classList.remove("hide");
-  var dock=[["panel","Panel","grid"],["clientes","Clientes","users"],["ordenes","Órdenes","clipboard"],["stock","Stock","package"],["proveedores","Proveedores","receipt","Proveed."],["turnos","Turnos","calendar"],["autos","Venta autos","car","Autos"],["mas","Más","menu"]].filter(function(x){return x[0]!=="autos"||esRubroAutos()});
+  var dock=[["panel","Panel","grid"],["clientes","Clientes","users"],["ordenes","Órdenes","clipboard"],["stock","Stock","package"],["proveedores","Proveedores","receipt","Proveed."],["turnos","Turnos","calendar"],["autos",ventaTxt().dock,esRubroAutos()?"car":"tag",ventaTxt().dockCorto],["mas","Más","menu"]];
   nv.style.gridTemplateColumns="repeat("+dock.length+",1fr)";
   nv.innerHTML=dock.map(function(x){return "<button data-v='"+x[0]+"' aria-label='"+x[1]+"'>"+ic(x[2])+(x[3]?"<span class='lg'>"+x[1]+"</span><span class='sh' aria-hidden='true'>"+x[3]+"</span>":"<span>"+x[1]+"</span>")+"</button>"}).join("");
   nv.querySelectorAll("button").forEach(function(b){b.onclick=function(){S.vista=b.dataset.v;S.orden=null;route()}});
@@ -315,13 +315,12 @@ function renderCrearTaller(){
 var VISTAS_PLATA={caja:1,reportes:1,proveedores:1,provForm:1,provDetalle:1,compraForm:1,pagoForm:1,provIA:1,neuForm:1,aliForm:1,listas:1,listaIA:1,contabilidad:1,autos:1,autoForm:1};
 function renderBloqueoPlata(){
   m.innerHTML="<h1>Función del plan Plata</h1>"+
-   "<div class='card'><p class='muted' style='margin-top:0'>Las cajas y los cheques, la contabilidad, los reportes, los proveedores, las listas de precio"+(esRubroAutos()?", la venta de autos":"")+" y los neumáticos vienen con el plan <b>Plata</b>. Todo lo demás del taller sigue funcionando igual.</p>"+
+   "<div class='card'><p class='muted' style='margin-top:0'>Las cajas y los cheques, la contabilidad, los reportes, los proveedores, las listas de precio"+", la "+ventaTxt().titulo.toLowerCase()+" y los neumáticos vienen con el plan <b>Plata</b>. Todo lo demás del taller sigue funcionando igual.</p>"+
    "<div class='btns'>"+(esDueno()?"<button class='btn' id='irPlan'>Ver los planes</button>":"")+"<button class='btn o' id='irPanel'>Volver</button></div></div>";
   var b=document.getElementById("irPlan");if(b)b.onclick=function(){S.vista="plan";route()};
   document.getElementById("irPanel").onclick=function(){S.vista="panel";route()};
 }
 function route(){
-  if((S.vista==="autos"||S.vista==="autoForm")&&!esRubroAutos())S.vista="panel";
   if(!esDueno()&&(S.vista==="caja"||S.vista==="plan"||S.vista==="reportes"||S.vista==="contabilidad"))S.vista="panel";
   if(VISTAS_PLATA[S.vista]&&nivelPlan()<1){renderBloqueoPlata();return}
   if(S.vista==="mas")renderMas();

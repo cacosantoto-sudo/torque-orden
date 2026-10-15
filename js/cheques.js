@@ -4,7 +4,7 @@
 // verde (más de 7 días), amarillo (de 4 a 7 días) y rojo (3 días o menos, o vencido).
 // Los rojos aparecen como aviso en el Panel.
 
-var FALTA_SQL_CHEQUES="Para usar los cheques falta correr en Supabase el SQL nuevo (sql/2026-10-15_cheques.sql).";
+var FALTA_SQL_CHEQUES="Para usar los cheques falta correr en Supabase el SQL nuevo (sql/2026-10-15_cheques_y_ventas.sql).";
 var TIPOS_CHEQUE=[["comun","Común"],["diferido","Pago diferido"]];
 var ESTADOS_CHEQUE=[["cartera","En cartera"],["depositado","Depositado"],["cobrado","Cobrado"],["endosado","Entregado a un tercero"],["rechazado","Rechazado"]];
 var DIAS_ROJO=3,DIAS_AMARILLO=7;
