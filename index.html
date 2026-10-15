@@ -154,6 +154,7 @@ input[type=search]{padding-left:40px;background-image:url("data:image/svg+xml,%3
 .tabs button{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;min-height:44px;border:0;border-radius:9px;background:none;color:var(--mute);font-family:var(--f-head);font-weight:700;font-size:1rem;letter-spacing:.05em;text-transform:uppercase}
 .tabs button[aria-selected="true"]{background:var(--ac);color:var(--on-ac)}
 .g2{display:grid;grid-template-columns:1fr 1fr;gap:0 10px;align-items:end}.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:0 10px;align-items:end}
+.g2.hide,.g3.hide{display:none}
 .torta{display:grid;grid-template-columns:minmax(150px,200px) 1fr;gap:16px;align-items:center}.torta svg{width:100%;height:auto}.torta .tz{transition:opacity .15s}.torta svg:hover .tz{opacity:.55}.torta svg .tz:hover{opacity:1}
 @media (max-width:520px){.torta{grid-template-columns:1fr}.torta svg{max-width:200px;margin:0 auto;display:block}}
 table.imp{min-width:640px}table.imp td{padding:3px 2px;vertical-align:top}table.imp input{min-height:38px;padding:6px 8px;font-size:.9rem;color:inherit;background:transparent;border-color:var(--line2)}
@@ -1293,7 +1294,7 @@ async function ajustarStock(id,delta){
 
 /* ---------------- menú Más ---------------- */
 function renderMas(){
-  var items=(esDueno()?[["caja","Cajas y cheques","wallet"],["contabilidad","Contabilidad","chart"],["articulos","Artículos","package"],["listas","Listas de precio","tag"],["reportes","Reportes","chart"],["plan","Mi Plan","crown"],["config","Configuración","sliders"]]:[["articulos","Artículos","package"],["listas","Listas de precio","tag"],["config","Configuración","sliders"]]);
+  var items=(esDueno()?[["caja","Cajas, banco y cheques","wallet"],["contabilidad","Contabilidad","chart"],["articulos","Artículos","package"],["listas","Listas de precio","tag"],["reportes","Reportes","chart"],["plan","Mi Plan","crown"],["config","Configuración","sliders"]]:[["articulos","Artículos","package"],["listas","Listas de precio","tag"],["config","Configuración","sliders"]]);
   m.innerHTML="<h1>Más</h1><div style='height:14px'></div>"+items.map(function(x){var trabado=VISTAS_PLATA[x[0]]&&nivelPlan()<1;
     return "<button class='fila' data-v='"+x[0]+"'>"+ic(x[2])+"<span>"+x[1]+(trabado?" <span class='tag plata'>PLATA</span>":"")+"</span>"+ic("chevron")+"</button>"}).join("")+
    "<button class='fila' data-v='patente'>"+ic("camera")+"<span>Buscar por "+patenteLabel().toLowerCase()+"</span>"+ic("chevron")+"</button>";

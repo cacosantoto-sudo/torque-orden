@@ -1,5 +1,5 @@
 // Función de servidor (Vercel la publica sola en /api/leer-extracto-mp).
-// Lee el extracto (resumen de movimientos) de Mercado Pago u otra billetera virtual en PDF
+// Lee el extracto (resumen de movimientos) de Mercado Pago, otra billetera virtual o una cuenta de banco en PDF
 // con la API de Claude y devuelve la lista de movimientos para que el taller la revise
 // antes de registrarla en su billetera. No guarda nada por sí misma.
 // Usa la variable de entorno ANTHROPIC_API_KEY. Tiene costo por uso: solo plan Oro.
@@ -21,8 +21,12 @@ async function tienePlanOro(tallerId, accessToken) {
   } catch (e) { return false; }
 }
 
-function instrucciones(billetera) {
-  return `Te paso el extracto o resumen de movimientos de una billetera virtual${billetera ? ` ("${String(billetera).slice(0, 60)}")` : ""} de un taller mecánico en Argentina, normalmente el "Resumen de cuenta" de Mercado Pago, con columnas como Fecha, Descripción, ID de la operación, Valor y Saldo.
+function instrucciones(billetera, tipo) {
+  const nombre = billetera ? ` ("${String(billetera).slice(0, 60)}")` : "";
+  const origen = tipo === "banco"
+    ? `Te paso el extracto o resumen de una cuenta bancaria${nombre} de un taller mecánico en Argentina, con columnas como Fecha, Concepto o Descripción, Comprobante o Referencia, Débito, Crédito y Saldo.`
+    : `Te paso el extracto o resumen de movimientos de una billetera virtual${nombre} de un taller mecánico en Argentina, normalmente el "Resumen de cuenta" de Mercado Pago, con columnas como Fecha, Descripción, ID de la operación, Valor y Saldo.`;
+  return `${origen}
 
 Extraé TODOS los movimientos, uno por renglón, en el orden en que aparecen. NO incluyas renglones de saldo inicial, saldo final, subtotales, totales ni encabezados.
 
@@ -37,7 +41,7 @@ Devolvé SOLO un objeto JSON, sin texto antes ni después, con esta forma exacta
 }
 
 Reglas:
-- "i" es el importe con signo: positivo si entra plata (cobro, transferencia recibida, venta, devolución), negativo si sale (pago, transferencia enviada, retiro, comisión, impuesto, cargo).
+- "i" es el importe con signo: positivo si entra plata (crédito, cobro, transferencia recibida, depósito, venta, devolución), negativo si sale (débito, pago, transferencia enviada, retiro, comisión, impuesto, cargo).
 - Importes con punto decimal (12345.67), sin $ ni separador de miles.
 - Las fechas del extracto están en formato argentino (día/mes/año).
 - "saldo_inicial" y "saldo_final" son los que figuran en el extracto; si no figuran, null.
@@ -51,11 +55,11 @@ export default async function handler(req, res) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return res.status(500).json({ error: "Falta configurar ANTHROPIC_API_KEY en Vercel" });
 
-  const { archivo, taller_id, access_token, billetera } = req.body || {};
+  const { archivo, taller_id, access_token, billetera, tipo } = req.body || {};
   if (!archivo || typeof archivo !== "string") return res.status(400).json({ error: "Mandá el PDF del extracto." });
 
   if (!(await tienePlanOro(taller_id, access_token))) {
-    return res.status(403).json({ error: "Leer el extracto de la billetera con IA es parte del plan Oro." });
+    return res.status(403).json({ error: "Leer el extracto con IA es parte del plan Oro." });
   }
 
   try {
@@ -74,7 +78,7 @@ export default async function handler(req, res) {
         fallbacks: "default",
         messages: [{ role: "user", content: [
           { type: "document", source: { type: "base64", media_type: "application/pdf", data: archivo } },
-          { type: "text", text: instrucciones(billetera) }
+          { type: "text", text: instrucciones(billetera, tipo) }
         ] }]
       })
     });
