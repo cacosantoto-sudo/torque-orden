@@ -10,6 +10,15 @@ var TIPOS_MANT={
   otro:{nombre:"Otro mantenimiento",corto:"Otro",emoji:"🧰"}
 };
 var ORDEN_TIPOS=["aceite","caja","distribucion"];
+// Caja automática y distribución son services de autos: en motos y náutica solo aceite y "otro"
+function tiposRubro(){return esRubroAutos()?Object.keys(TIPOS_MANT):["aceite","otro"]}
+function ordenTiposRubro(){return ORDEN_TIPOS.filter(function(t){return tiposRubro().indexOf(t)>=0})}
+// Intervalo sugerido del service de aceite según el rubro (náutica en horas de motor)
+function intervaloMant(t){var x=TIPOS_MANT[t]||{};if(t!=="aceite"||esRubroAutos())return x;return esRubroNautica()?{km:100,meses:12}:{km:5000,meses:6}}
+// Filtros que se cargan en el service de aceite según el rubro
+function filtrosRubro(){var F=[["filtro_aceite","Filtro de aceite"],["filtro_aire","Filtro de aire"],["filtro_habitaculo","Filtro de habitáculo"],["filtro_combustible","Filtro de combustible"]];
+  if(esRubroAutos())return F;return F.filter(function(f){return f[0]!=="filtro_habitaculo"&&!(esRubroNautica()&&f[0]==="filtro_aire")})}
+function ejAceite(){var r=rubroTaller();return r==="nautica"?{marca:"Quicksilver",visc:"25W-40",litros:"4"}:r==="motos"?{marca:"Motul 5100",visc:"10W-40",litros:"1,2"}:{marca:"Shell Helix",visc:"5W-30",litros:"4,2"}}
 var COMPONENTES_DIST=["Correa de distribución","Cadena de distribución","Tensor","Rodillo/s","Bomba de agua","Correa de accesorios","Retenes"];
 function fechaAR(f){if(!f)return "";var d=String(f).length===10?new Date(f+"T12:00:00"):new Date(f);return isNaN(d)?String(f):d.toLocaleDateString("es-AR")}
 function mesAnio(f){if(!f)return "";var d=new Date(String(f).slice(0,10)+"T12:00:00");var t=d.toLocaleDateString("es-AR",{month:"long",year:"numeric"});return t.charAt(0).toUpperCase()+t.slice(1)}
@@ -30,7 +39,7 @@ function estadoProximo(p,kmActual){
   var hoy=new Date(hoyISO()+"T12:00:00"),dias=p.proximo_fecha?Math.round((new Date(p.proximo_fecha+"T12:00:00")-hoy)/864e5):null;
   var faltaKm=p.proximo_km&&kmActual?Number(p.proximo_km)-Number(kmActual):null;
   if((dias!=null&&dias<0)||(faltaKm!=null&&faltaKm<=0))return {cls:"bad",txt:"Vencido"};
-  if((dias!=null&&dias<=30)||(faltaKm!=null&&faltaKm<=1000))return {cls:"w",txt:"Por vencer"};
+  if((dias!=null&&dias<=30)||(faltaKm!=null&&faltaKm<=(esRubroNautica()?10:rubroTaller()==="motos"?500:1000)))return {cls:"w",txt:"Por vencer"};
   return {cls:"g",txt:"Al día"};
 }
 function kmActualDe(ords,mants,motores){
@@ -41,7 +50,7 @@ function detalleMant(x){
   var d=x.datos||{},L=[];
   if(x.tipo==="aceite"){
    var ac=[d.aceite_marca,d.aceite_tipo,d.viscosidad].filter(Boolean).join(" ");if(ac||d.litros)L.push(["Aceite",ac+(d.litros?" · "+String(d.litros).replace(".",",")+" L":"")]);
-   [["filtro_aceite","Filtro de aceite"],["filtro_aire","Filtro de aire"],["filtro_habitaculo","Filtro de habitáculo"],["filtro_combustible","Filtro de combustible"]].forEach(function(f){if(d[f[0]])L.push([f[1],d[f[0]]])});
+   filtrosRubro().forEach(function(f){if(d[f[0]])L.push([f[1],d[f[0]]])});
   }else if(x.tipo==="caja"){
    if(d.atf||d.litros)L.push(["Aceite ATF",[d.atf,d.litros?String(d.litros).replace(".",",")+" L":""].filter(Boolean).join(" · ")]);
    L.push(["Filtro",d.filtro?d.filtro:"No se reemplazó"]);
@@ -54,7 +63,7 @@ function detalleMant(x){
 /* ---------- tarjetas para la ficha (app) ---------- */
 function fichaProximosHtml(mants,kmActual){
   var P=proximosDe(mants);
-  var filas=ORDEN_TIPOS.filter(function(t){return P[t]&&(P[t].proximo_km||P[t].proximo_fecha)}).map(function(t){
+  var filas=ordenTiposRubro().filter(function(t){return P[t]&&(P[t].proximo_km||P[t].proximo_fecha)}).map(function(t){
    var p=P[t],est=estadoProximo(p,kmActual);
    return "<div style='border-top:1px solid var(--line);padding:10px 0'><div class='lr'><b style='font-family:var(--f-head);text-transform:uppercase;letter-spacing:.04em;font-size:1.05rem'>"+TIPOS_MANT[t].emoji+" "+TIPOS_MANT[t].corto+"</b>"+(est?"<span class='tag "+(est.cls==="bad"?"bad":est.cls)+"'>"+est.txt+"</span>":"")+"</div>"+
     (p.proximo_km?"<div>Próximo: <b>"+kmTxt(p.proximo_km)+"</b></div>":"")+(p.proximo_fecha?"<div>Fecha límite: <b>"+fechaAR(p.proximo_fecha)+"</b></div>":"")+"</div>"}).join("");
@@ -85,12 +94,11 @@ async function renderMantForm(){
   var d=x.datos,tocadoKm=!!x.id,tocadoFecha=!!x.id;
   function inp(id,label,val,extra){return "<label for='mt_"+id+"'>"+label+"</label><input id='mt_"+id+"' value=\""+esc(val==null?"":val)+"\""+(extra||"")+">"}
   function camposTipo(t){
-   if(t==="aceite")return "<div class='g2'><div>"+inp("aceite_marca","Marca de aceite",d.aceite_marca," placeholder='Shell Helix'")+"</div><div>"+
+   if(t==="aceite")return "<div class='g2'><div>"+inp("aceite_marca","Marca de aceite",d.aceite_marca," placeholder='"+ejAceite().marca+"'")+"</div><div>"+
      "<label for='mt_aceite_tipo'>Tipo</label><select id='mt_aceite_tipo'><option value=''>—</option>"+["Sintético","Semisintético","Mineral"].map(function(o){return "<option"+(d.aceite_tipo===o?" selected":"")+">"+o+"</option>"}).join("")+"</select></div></div>"+
-     "<div class='g2'><div>"+inp("viscosidad","Viscosidad",d.viscosidad," placeholder='5W-30' autocapitalize='characters'")+"</div><div>"+inp("litros","Cantidad (litros)",d.litros," inputmode='decimal' placeholder='4,2'")+"</div></div>"+
+     "<div class='g2'><div>"+inp("viscosidad","Viscosidad",d.viscosidad," placeholder='"+ejAceite().visc+"' autocapitalize='characters'")+"</div><div>"+inp("litros","Cantidad (litros)",d.litros," inputmode='decimal' placeholder='"+ejAceite().litros+"'")+"</div></div>"+
      "<p class='muted' style='margin:14px 0 0'>Filtros: escribí marca o código del que pusiste. Si no se cambió, dejalo vacío.</p>"+
-     "<div class='g2'><div>"+inp("filtro_aceite","Filtro de aceite",d.filtro_aceite)+"</div><div>"+inp("filtro_aire","Filtro de aire",d.filtro_aire)+"</div></div>"+
-     "<div class='g2'><div>"+inp("filtro_habitaculo","Filtro de habitáculo",d.filtro_habitaculo)+"</div><div>"+inp("filtro_combustible","Filtro de combustible",d.filtro_combustible)+"</div></div>";
+     "<div class='g2'>"+filtrosRubro().map(function(f){return "<div>"+inp(f[0],f[1],d[f[0]])+"</div>"}).join("")+"</div>";
    if(t==="caja")return "<div class='g2'><div>"+inp("atf","Aceite ATF utilizado",d.atf," placeholder='Dexron VI'")+"</div><div>"+inp("litros","Cantidad (litros)",d.litros," inputmode='decimal'")+"</div></div>"+
      inp("filtro","Filtro reemplazado (marca o código; vacío si no se cambió)",d.filtro);
    if(t==="distribucion")return "<label>Componentes reemplazados</label><div style='display:grid;grid-template-columns:1fr 1fr;gap:6px'>"+COMPONENTES_DIST.map(function(c,i){
@@ -98,7 +106,7 @@ async function renderMantForm(){
      inp("otros","Otros componentes",d.otros);
    return "<label for='mt_descripcion'>Qué se hizo</label><textarea id='mt_descripcion'>"+esc(d.descripcion||"")+"</textarea>";
   }
-  var h="<div class='card'><label for='mt_tipo'>Tipo de service</label><select id='mt_tipo'>"+Object.keys(TIPOS_MANT).map(function(t){return "<option value='"+t+"'"+(x.tipo===t?" selected":"")+">"+TIPOS_MANT[t].emoji+" "+TIPOS_MANT[t].nombre+"</option>"}).join("")+"</select>"+
+  var h="<div class='card'><label for='mt_tipo'>Tipo de service</label><select id='mt_tipo'>"+tiposRubro().concat(tiposRubro().indexOf(x.tipo)<0&&TIPOS_MANT[x.tipo]?[x.tipo]:[]).map(function(t){return "<option value='"+t+"'"+(x.tipo===t?" selected":"")+">"+TIPOS_MANT[t].emoji+" "+TIPOS_MANT[t].nombre+"</option>"}).join("")+"</select>"+
    "<div class='g2'><div><label for='mt_fecha'>Fecha</label><input id='mt_fecha' type='date' value='"+esc(x.fecha||hoyISO())+"'></div><div>"+inp("km",medidorLabel(),x.km," inputmode='numeric'")+"</div></div></div>"+
    "<div class='card'><h2 id='mt_titDet'>Detalle</h2><div id='mt_det'>"+camposTipo(x.tipo)+"</div></div>"+
    "<div class='card' id='mt_prox'><h2>Próximo service</h2><div class='g2'><div>"+inp("proximo_km","Próximo a los ("+(rubroTaller()==="nautica"?"horas":"km")+")",x.proximo_km," inputmode='numeric'")+"</div><div><label for='mt_proximo_fecha'>Fecha límite</label><input id='mt_proximo_fecha' type='date' value='"+esc(x.proximo_fecha||"")+"'></div></div>"+
@@ -108,12 +116,12 @@ async function renderMantForm(){
   document.getElementById("box").outerHTML=h;
   var selTipo=document.getElementById("mt_tipo");
   function sugerir(){
-   var t=TIPOS_MANT[selTipo.value],km=Number(document.getElementById("mt_km").value),f=document.getElementById("mt_fecha").value;
+   var t=intervaloMant(selTipo.value),km=Number(document.getElementById("mt_km").value),f=document.getElementById("mt_fecha").value;
    document.getElementById("mt_prox").classList.toggle("hide",selTipo.value==="otro");
    if(!t.km){document.getElementById("mt_sug").textContent="";return}
    if(!tocadoKm&&km)document.getElementById("mt_proximo_km").value=km+t.km;
    if(!tocadoFecha&&f)document.getElementById("mt_proximo_fecha").value=sumarMeses(f,t.meses);
-   document.getElementById("mt_sug").textContent="Se sugiere cada "+t.km.toLocaleString("es-AR")+" km o "+t.meses+" meses. Podés cambiarlo.";
+   document.getElementById("mt_sug").textContent="Se sugiere cada "+t.km.toLocaleString("es-AR")+(esRubroNautica()?" horas":" km")+" o "+t.meses+" meses. Podés cambiarlo.";
   }
   selTipo.onchange=function(){d={};document.getElementById("mt_det").innerHTML=camposTipo(selTipo.value);if(!x.id){tocadoKm=false;tocadoFecha=false}sugerir()};
   document.getElementById("mt_km").oninput=sugerir;document.getElementById("mt_fecha").onchange=sugerir;
@@ -126,7 +134,8 @@ async function renderMantForm(){
   document.getElementById("mtGuardar").onclick=async function(){
    function v(id){var el=document.getElementById("mt_"+id);return el?el.value.trim():""}
    var tipo=selTipo.value,datos={};
-   if(tipo==="aceite")["aceite_marca","aceite_tipo","viscosidad","litros","filtro_aceite","filtro_aire","filtro_habitaculo","filtro_combustible"].forEach(function(k){if(v(k))datos[k]=v(k)});
+   if(tipo==="aceite")["aceite_marca","aceite_tipo","viscosidad","litros"].concat(filtrosRubro().map(function(f){return f[0]})).forEach(function(k){if(v(k))datos[k]=v(k)});
+   if(tipo==="aceite")["filtro_aire","filtro_habitaculo"].forEach(function(k){if(d[k]&&!document.getElementById("mt_"+k))datos[k]=d[k]}); // no perder filtros que este rubro no muestra
    else if(tipo==="caja")["atf","litros","filtro"].forEach(function(k){if(v(k))datos[k]=v(k)});
    else if(tipo==="distribucion"){datos.componentes=[].slice.call(m.querySelectorAll("[data-comp]:checked")).map(function(c){return c.dataset.comp});if(v("otros"))datos.otros=v("otros")}
    else if(v("descripcion"))datos.descripcion=v("descripcion");
@@ -142,7 +151,7 @@ async function renderMantForm(){
 }
 function volverDeMant(){var M=S.mant||{};if(M.volver==="ordenForm"){S.vista="ordenForm"}else{S.fichaId=(M.equipo&&M.equipo.id)||S.fichaId;S.vista="ficha"}route()}
 
-/* ---------- QR del vehículo ---------- */
+/* ---------- QR de la ficha ---------- */
 function urlBase(){return location.origin+location.pathname.replace(/[^/]*$/,"")}
 function urlFicha(token){return urlBase()+"ficha.html?t="+token}
 function qrHtml(texto,px){
@@ -170,7 +179,7 @@ async function cargarServicesPorVencer(){
   if(r.error){box.remove();return}
   var porEq={};(r.data||[]).forEach(function(x){(porEq[x.equipo_id]=porEq[x.equipo_id]||[]).push(x)});
   var hoy=new Date(hoyISO()+"T12:00:00"),lista=[];
-  Object.keys(porEq).forEach(function(k){var P=proximosDe(porEq[k]);ORDEN_TIPOS.forEach(function(t){var p=P[t];if(!p||!p.proximo_fecha)return;
+  Object.keys(porEq).forEach(function(k){var P=proximosDe(porEq[k]);ordenTiposRubro().forEach(function(t){var p=P[t];if(!p||!p.proximo_fecha)return;
    var dias=Math.round((new Date(p.proximo_fecha+"T12:00:00")-hoy)/864e5);if(dias<=30)lista.push({p:p,t:t,dias:dias})})});
   lista.sort(function(a,b){return a.dias-b.dias});
   var h="<h2>Services por vencer</h2><p class='muted' style='margin-top:0'>Vencidos o con fecha límite en los próximos 30 días.</p>";

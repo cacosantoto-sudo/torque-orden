@@ -79,7 +79,7 @@ function pintarFormTurno(){
   if(!S.tModo||!hayCli)S.tModo=hayCli?"existente":"nuevo";
   if(t&&S.tModoDe!==t.id){S.tModoDe=t.id;S.tModo=(t.cliente_id||clientePorNombre(t.cliente_nombre))?"existente":"nuevo"}
   var nuevo=S.tModo==="nuevo",cont=document.getElementById("turnoForm");
-  var lblVeh=rubroTaller()==="nautica"?"Embarcación":"Vehículo";
+  var lblVeh=equipoLabel(),r=rubroTaller(),ejT=r==="nautica"?["Bermuda","21 Classic","Bermuda 21 REY 12345"]:r==="motos"?["Honda","CB 250 Twister","Twister A123BCD"]:["Volkswagen","Gol Trend","Gol Trend AB123CD"];
   cont.innerHTML="<h2>"+(t?"Editar turno":"Nuevo turno")+"</h2>"+
    "<div class='tabs' role='tablist' style='margin-bottom:4px'><button role='tab' data-tmodo='existente' aria-selected='"+!nuevo+"'"+(hayCli?"":" disabled")+">"+ic("users")+" Cliente existente</button><button role='tab' data-tmodo='nuevo' aria-selected='"+nuevo+"'>"+ic("plus")+" Cliente nuevo</button></div>"+
    (nuevo
@@ -87,12 +87,12 @@ function pintarFormTurno(){
      "<label for='tuCli'>Nombre y apellido</label><input id='tuCli' autocomplete='off' value=\""+esc(f.cliente_nombre)+"\" placeholder='Nombre del cliente nuevo'>"+
      "<div class='g2'><div><label for='tuTel'>Teléfono</label><input id='tuTel' type='tel' value=\""+esc(f.telefono)+"\" placeholder='Para avisarle por WhatsApp'></div><div><label for='tuDni'>DNI / CUIT</label><input id='tuDni' inputmode='numeric' placeholder='Opcional'></div></div>"+
      "<label for='tuMail'>Email</label><input id='tuMail' type='email' placeholder='Opcional'>"+
-     "<div class='g2'><div><label for='tuMarca'>Marca</label><input id='tuMarca' placeholder='"+(rubroTaller()==="nautica"?"Ej.: Bermuda":"Ej.: Volkswagen")+"'></div><div><label for='tuModelo'>Modelo</label><input id='tuModelo' placeholder='"+(rubroTaller()==="nautica"?"Ej.: 21 Classic":"Ej.: Gol Trend")+"'></div></div>"+
+     "<div class='g2'><div><label for='tuMarca'>Marca</label><input id='tuMarca' placeholder='Ej.: "+ejT[0]+"'></div><div><label for='tuModelo'>Modelo</label><input id='tuModelo' placeholder='Ej.: "+ejT[1]+"'></div></div>"+
      "<label for='tuPat'>"+patenteLabel()+"</label><input id='tuPat' autocapitalize='characters' placeholder='Opcional'>"
     :"<label for='tuCli'>Cliente</label><input id='tuCli' list='tuCliList' autocomplete='off' value=\""+esc(f.cliente_nombre)+"\" placeholder='Escribí y elegí de la lista'>"+
      "<datalist id='tuCliList'>"+(S.tClientes||[]).map(function(c){return "<option value=\""+esc(c.nombre)+"\">"+(c.telefono?esc(c.telefono):"")+"</option>"}).join("")+"</datalist>"+
      "<label for='tuTel'>Teléfono</label><input id='tuTel' type='tel' value=\""+esc(f.telefono)+"\" placeholder='Opcional, para avisarle por WhatsApp'>"+
-     "<label for='tuVeh'>"+lblVeh+"</label><input id='tuVeh' list='tuVehList' autocomplete='off' value=\""+esc(f.vehiculo)+"\" placeholder='Ej.: Gol Trend AB123CD'><datalist id='tuVehList'></datalist>")+
+     "<label for='tuVeh'>"+lblVeh+"</label><input id='tuVeh' list='tuVehList' autocomplete='off' value=\""+esc(f.vehiculo)+"\" placeholder='Ej.: "+ejT[2]+"'><datalist id='tuVehList'></datalist>")+
    "<div class='g2'><div><label for='tuFecha'>Fecha</label><input id='tuFecha' type='date' value='"+esc(f.fecha)+"'></div><div><label for='tuHora'>Hora</label><input id='tuHora' type='time' step='300' value='"+esc(horaCorta(f.hora))+"'></div></div>"+
    "<label for='tuNota'>Nota</label><input id='tuNota' value=\""+esc(f.nota)+"\" placeholder='Opcional: qué trabajo, service, etc.'>"+
    "<div id='tuSt' class='status hide'></div><div class='btns'><button class='btn' id='tuGuardar'>"+(t?"Guardar cambios":"Agendar turno")+"</button>"+(t?"<button class='btn o' id='tuCancelar'>Cancelar</button>":"")+"</div>";

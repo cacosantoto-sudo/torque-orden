@@ -11,6 +11,9 @@ function combustiblesTaller(){return esRubroAutos()?COMBUSTIBLES:["Nafta","Eléc
 function ejVeh(k){var moto={marca:"Honda",modelo:"CB 250 Twister",motor:"Monocilíndrico 4T",cilindrada:"249 cc",codigo:"MC41E",caja:"5 velocidades"},
   auto={marca:"Toyota",modelo:"Corolla XEi",motor:"1.8 16v",cilindrada:"1798 cc",codigo:"2ZR-FE",caja:"U341E"};return (esRubroAutos()?auto:moto)[k]}
 function usaMotorEnFicha(){return rubroTaller()!=="nautica"}
+// Caja manual/automática y su código: solo autos
+function usaTransmision(){return esRubroAutos()}
+function chasisLabel(){var r=rubroTaller();return r==="nautica"?"N° de casco":r==="motos"?"N° de chasis":"N° de chasis / VIN"}
 function cajaTxt(t){return t==="automatica"?"Automática":t==="manual"?"Manual":t||""}
 // Nombre corto del vehículo: el nombre cargado, o marca + modelo
 function vehTitulo(e){if(!e)return "";var mm=[e.marca,e.modelo].filter(Boolean).join(" ");return e.nombre||mm||equipoLabel()}
@@ -22,12 +25,12 @@ function vehBusqueda(e,c){
    c&&c.nombre,c&&c.telefono,c&&String(c.telefono||"").replace(/[^0-9]/g,"")].concat((e.motores||[]).map(function(mo){return mo.marca+" "+mo.modelo})).join(" "))}
 function tabsClientes(activa){
   return "<div class='tabs' role='tablist'><button role='tab' data-tab='clientes' aria-selected='"+(activa==="clientes")+"'>"+ic("users")+" Clientes</button>"+
-   "<button role='tab' data-tab='vehiculos' aria-selected='"+(activa==="vehiculos")+"'>"+ic("car")+" "+(rubroTaller()==="nautica"?"Embarcaciones":"Vehículos")+"</button></div>"}
+   "<button role='tab' data-tab='vehiculos' aria-selected='"+(activa==="vehiculos")+"'>"+ic(equipoIcon())+" "+equiposTitulo()+"</button></div>"}
 function conectarTabs(){m.querySelectorAll("[data-tab]").forEach(function(b){b.onclick=function(){S.vista=b.dataset.tab;route()}})}
 
 /* ---------- buscador de vehículos ---------- */
 async function renderVehiculos(){
-  m.innerHTML="<h1>"+(rubroTaller()==="nautica"?"Embarcaciones":"Vehículos")+"</h1>"+tabsClientes("vehiculos")+"<div id='box'>"+skel()+"</div>";
+  m.innerHTML="<h1>"+equiposTitulo()+"</h1>"+tabsClientes("vehiculos")+"<div id='box'>"+skel()+"</div>";
   conectarTabs();
   var r=await sb.from("equipos").select("*,clientes(id,nombre,telefono),motores(marca,modelo)").order("creado",{ascending:false});
   if(r.error)r=await sb.from("equipos").select("*,clientes(id,nombre,telefono),motores(marca,modelo)");
@@ -41,8 +44,8 @@ async function renderVehiculos(){
     (vehDetalle(e)?"<br><span class='muted'>"+esc(vehDetalle(e))+"</span>":"")+
     "<br><span class='muted'>"+ic("users")+" "+esc(c.nombre||"Sin cliente")+"</span></span>"+
     "<span style='text-align:right'>"+(e.matricula_patente?plateHtml(e.matricula_patente,"sm"):"")+"</span></button></div>"}).join("")||
-   vacio("car","Todavía no hay "+(rubroTaller()==="nautica"?"embarcaciones":"vehículos"),"Cargá uno con el botón de arriba o desde la ficha de un cliente.");
-  h+="<p id='sinres' class='muted hide'>No hay "+(rubroTaller()==="nautica"?"embarcaciones":"vehículos")+" que coincidan con la búsqueda.</p>";
+   vacio(equipoIcon(),"Todavía no hay "+equiposTitulo().toLowerCase(),"Cargá uno con el botón de arriba o desde la ficha de un cliente.");
+  h+="<p id='sinres' class='muted hide'>No hay "+equiposTitulo().toLowerCase()+" que coincidan con la búsqueda.</p>";
   document.getElementById("box").outerHTML=h;
   var bv=document.getElementById("buscar");
   bv.oninput=function(){S.qVehiculos=bv.value;filtrarLista(bv.value)};
@@ -73,14 +76,14 @@ async function renderVehiculoForm(){
    "<div class='g2'><div>"+inputVeh("marca","Marca",e.marca,auto?" placeholder='"+ejVeh("marca")+"'":"")+"</div><div>"+inputVeh("modelo","Modelo",e.modelo,auto?" placeholder='"+ejVeh("modelo")+"'":"")+"</div></div>"+
    "<div class='g2'><div>"+inputVeh("anio","Año",e.anio," inputmode='numeric' maxlength='4'")+"</div><div>"+inputVeh("color","Color",e.color)+"</div></div>"+
    "<div class='g2'><div>"+inputVeh("patente",patenteLabel(),e.matricula_patente," autocapitalize='characters' autocomplete='off'")+"</div><div>"+inputVeh("nombre",auto?"Nombre o apodo (opcional)":"Nombre",e.nombre,auto?" placeholder='Si lo dejás vacío se usa marca y modelo'":"")+"</div></div>"+
-   inputVeh("vin","N° de chasis / VIN (opcional)",e.vin," autocapitalize='characters' autocomplete='off'")+
+   inputVeh("vin",chasisLabel()+" (opcional)",e.vin," autocapitalize='characters' autocomplete='off'")+
    "</div>";
   if(auto)h+="<div class='card'><h2>Motor</h2>"+
    "<div class='g2'><div>"+inputVeh("motor","Motor",e.motor," placeholder='"+ejVeh("motor")+"'")+"</div><div>"+inputVeh("cilindrada","Cilindrada",e.cilindrada," placeholder='"+ejVeh("cilindrada")+"'")+"</div></div>"+
-   "<div class='g2'><div>"+selectVeh("combustible","Combustible",e.combustible,combustiblesTaller())+"</div><div>"+inputVeh("codigo_motor","Código de motor",e.codigo_motor," autocapitalize='characters' placeholder='"+ejVeh("codigo")+"'")+"</div></div></div>"+
-   "<div class='card'><h2>Transmisión</h2>"+
+   "<div class='g2'><div>"+selectVeh("combustible","Combustible",e.combustible,combustiblesTaller())+"</div><div>"+inputVeh("codigo_motor","Código de motor",e.codigo_motor," autocapitalize='characters' placeholder='"+ejVeh("codigo")+"'")+"</div></div></div>";
+  if(usaTransmision())h+="<div class='card'><h2>Transmisión</h2>"+
    "<div class='g2'><div>"+selectVeh("caja_tipo","Tipo de caja",e.caja_tipo,[["manual","Manual"],["automatica","Automática"]])+"</div><div>"+inputVeh("caja_modelo","Modelo o código de caja",e.caja_modelo," placeholder='"+ejVeh("caja")+"'")+"</div></div></div>";
-  h+="<div class='card'><h2>Notas</h2><textarea id='v_notas' placeholder='Cualquier dato útil del "+equipoLabel().toLowerCase()+"'>"+esc(e.notas||"")+"</textarea></div>";
+  h+="<div class='card'><h2>Notas</h2><textarea id='v_notas' placeholder='Cualquier dato útil "+(equipoFem()?"de la ":"del ")+equipoLabel().toLowerCase()+"'>"+esc(e.notas||"")+"</textarea></div>";
   h+="<div id='st' class='status hide'></div><div class='btns'><button class='btn' id='vGuardar'>Guardar</button><button class='btn o' id='vVolver'>Volver</button></div>";
   document.getElementById("box").outerHTML=h;
   document.getElementById("vVolver").onclick=volverDeVehiculo;
@@ -89,7 +92,8 @@ async function renderVehiculoForm(){
    var data={cliente_id:v("cliente")||null,marca:v("marca")||null,modelo:v("modelo")||null,anio:Number(v("anio"))||null,color:v("color")||null,
     matricula_patente:normPatente(v("patente"))||null,vin:v("vin").toUpperCase()||null,notas:v("notas")||null};
    data.nombre=v("nombre")||[data.marca,data.modelo].filter(Boolean).join(" ")||null;
-   if(auto)Object.assign(data,{motor:v("motor")||null,cilindrada:v("cilindrada")||null,combustible:v("combustible")||null,codigo_motor:v("codigo_motor").toUpperCase()||null,caja_tipo:v("caja_tipo")||null,caja_modelo:v("caja_modelo").toUpperCase()||null});
+   if(auto)Object.assign(data,{motor:v("motor")||null,cilindrada:v("cilindrada")||null,combustible:v("combustible")||null,codigo_motor:v("codigo_motor").toUpperCase()||null});
+   if(usaTransmision())Object.assign(data,{caja_tipo:v("caja_tipo")||null,caja_modelo:v("caja_modelo").toUpperCase()||null});
    if(!data.cliente_id){say("st","Elegí el cliente.",true);return}
    if(!data.nombre){say("st","Completá la marca y el modelo"+(auto?"":" o el nombre")+".",true);return}
    this.disabled=true;say("st","Guardando…");
@@ -104,12 +108,13 @@ function volverDeVehiculo(){var F=S.vehForm||{};S.vista=F.volver&&F.volver!=="ve
 /* ---------- tarjetas para la ficha ---------- */
 function fichaDatosHtml(e){
   var filas=function(lista){return lista.filter(function(x){return x[1]}).map(function(x){return "<div class='lr' style='border-top:1px solid var(--line);padding:6px 0'><span class='muted'>"+x[0]+"</span><b style='font-family:var(--f-body);text-align:right'>"+esc(x[1])+"</b></div>"}).join("")};
-  var datos=filas([["Marca",e.marca],["Modelo",e.modelo],["Año",e.anio],["Color",e.color],["Chasis / VIN",e.vin]]);
+  var datos=filas([["Marca",e.marca],["Modelo",e.modelo],["Año",e.anio],["Color",e.color],[esRubroAutos()?"Chasis / VIN":chasisLabel().replace("N° de c","C"),e.vin]]);
   var h="<div class='card'><div class='lr'><h2 style='margin:0'>Datos</h2><button class='btn o' id='fEditar' style='padding:6px 12px;min-height:0'>"+ic("pencil")+" Editar</button></div>"+(datos||"<p class='muted' style='margin:8px 0 0'>Todavía no cargaste marca, modelo ni color.</p>")+"</div>";
   if(usaMotorEnFicha()){
    var mot=filas([["Motor",e.motor],["Cilindrada",e.cilindrada],["Combustible",e.combustible],["Código de motor",e.codigo_motor]]);
-   var caja=filas([["Tipo de caja",cajaTxt(e.caja_tipo)],["Modelo / código",e.caja_modelo]]);
-   h+="<div class='card'><h2>Motor y transmisión</h2>"+(mot||caja?mot+caja:"<p class='muted' style='margin:0'>Sin datos de motor ni de caja. Tocá <b>Editar</b> para cargarlos.</p>")+"</div>";
+   if(!usaTransmision())h+="<div class='card'><h2>Motor</h2>"+(mot||"<p class='muted' style='margin:0'>Sin datos del motor. Tocá <b>Editar</b> para cargarlos.</p>")+"</div>";
+   else{var caja=filas([["Tipo de caja",cajaTxt(e.caja_tipo)],["Modelo / código",e.caja_modelo]]);
+   h+="<div class='card'><h2>Motor y transmisión</h2>"+(mot||caja?mot+caja:"<p class='muted' style='margin:0'>Sin datos de motor ni de caja. Tocá <b>Editar</b> para cargarlos.</p>")+"</div>"}
   }
   return h;
 }
