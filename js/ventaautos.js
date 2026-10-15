@@ -1,13 +1,27 @@
-// Venta de autos: unidades propias o en consignación, con el cliente (existente o nuevo),
+// Venta de unidades según el rubro: autos, motos (nuevas y usadas) o lanchas y motores fuera de borda.
+// Unidades propias o en consignación, con el cliente (existente o nuevo),
 // precio para el cliente, precio de publicación, datos del auto, documentación en PDF y fotos.
 // Los archivos van a la carpeta privada "documentos" del taller: <taller>/autos/<auto>/...
 var VISTAS=window.VISTAS||(window.VISTAS={}),GRUPOS=window.GRUPOS||(window.GRUPOS={});
 VISTAS.autos=renderAutos;VISTAS.autoForm=renderAutoForm;GRUPOS.autos="autos";GRUPOS.autoForm="autos";
 
-var FALTA_SQL_AUTOS="Para usar Venta de autos falta correr en Supabase el SQL nuevo (sql/2026-10-14_2_contabilidad_venta_autos.sql).";
+var FALTA_SQL_AUTOS="Para usar la venta de unidades falta correr en Supabase el SQL nuevo (sql/2026-10-14_2_contabilidad_venta_autos.sql).";
+var FALTA_SQL_VENTA2="Para guardar si es nueva o usada y el tipo de unidad falta correr en Supabase el SQL nuevo (sql/2026-10-15_cheques_y_ventas.sql).";
+// Textos de la venta según el rubro del taller
+function ventaTxt(){
+  var r=rubroTaller();
+  if(r==="motos")return {titulo:"Venta de motos",dock:"Venta motos",dockCorto:"Motos",unidad:"moto",plural:"motos",fem:true,marca:"Honda",modelo:"CB 250 Twister",patente:"Patente",patPh:"A123BCD",medidor:"Kilómetros",med:"km",
+   docs:"título, cédula, 08, informe de dominio…",fotos:"Fotos de la moto",tipos:null};
+  if(r==="nautica")return {titulo:"Venta de lanchas y motores fuera de borda",dock:"Venta lanchas",dockCorto:"Lanchas",unidad:"unidad",plural:"lanchas y motores",fem:true,marca:"Bermuda",modelo:"180 Classic",patente:"Matrícula",patPh:"REY 12345",medidor:"Horas de motor",med:"h",
+   docs:"título, matrícula, certificado de navegabilidad, factura del motor…",fotos:"Fotos de la unidad",tipos:[["lancha","Lancha / embarcación"],["motor_fb","Motor fuera de borda"]]};
+  return {titulo:"Venta de autos",dock:"Venta autos",dockCorto:"Autos",unidad:"auto",plural:"autos",fem:false,marca:"Volkswagen",modelo:"Gol Trend 1.6",patente:"Patente",patPh:"AB123CD",medidor:"Kilómetros",med:"km",
+   docs:"título, cédula, 08, VTV, informe de dominio…",fotos:"Fotos del vehículo",tipos:null};
+}
+function capital(t){return t.charAt(0).toUpperCase()+t.slice(1)}
+function tipoUnidadTxt(v){var t=(ventaTxt().tipos||[]).filter(function(x){return x[0]===v})[0];return t?t[1]:""}
 var ESTADOS_AUTO=[["disponible","Disponible","g"],["reservado","Reservado","w"],["vendido","Vendido",""]];
 function estadoAuto(v){return ESTADOS_AUTO.filter(function(e){return e[0]===v})[0]||ESTADOS_AUTO[0]}
-function tituloAuto(a){return [a.marca,a.modelo,a.anio].filter(Boolean).join(" ")||"Auto sin datos"}
+function tituloAuto(a){return [a.marca,a.modelo,a.anio].filter(Boolean).join(" ")||capital(ventaTxt().unidad)+" sin datos"}
 function irAuto(id){S.autoEdit=id||null;S.vista="autoForm";route();window.scrollTo(0,0)}
 // Para ver una foto o un PDF guardado se pide un enlace temporal
 async function urlFirmadas(rutas){
@@ -19,7 +33,8 @@ async function urlFirmadas(rutas){
 
 /* ---------- lista ---------- */
 async function renderAutos(){
-  m.innerHTML="<div class='lr'><h1>Venta de autos</h1><button class='btn' id='autoNuevo' style='padding:8px 14px;min-height:0'>"+ic("plus")+" Auto</button></div><div id='box'>"+skel()+"</div>";
+  var vt=ventaTxt();
+  m.innerHTML="<div class='lr'><h1>"+vt.titulo+"</h1><button class='btn' id='autoNuevo' style='padding:8px 14px;min-height:0'>"+ic("plus")+" "+capital(vt.unidad)+"</button></div><div id='box'>"+skel()+"</div>";
   document.getElementById("autoNuevo").onclick=function(){irAuto(null)};
   var r=await sb.from("autos_venta").select("*, clientes(nombre,telefono)").order("creado",{ascending:false});
   if(r.error){document.getElementById("box").innerHTML="<div class='status err'>"+(/relation|does not exist|schema cache/i.test(r.error.message)?FALTA_SQL_AUTOS:esc(r.error.message))+"</div>";return}
@@ -31,18 +46,19 @@ async function renderAutos(){
 function pintarAutos(){
   var box=document.getElementById("box");if(!box)return;
   var fe=S.autoFiltro||"activos",lista=S.autos.filter(function(a){return fe==="todos"||(fe==="activos"?a.estado!=="vendido":a.estado===fe)});
+  var vt=ventaTxt();
   var h="<div class='tabs' role='tablist' style='flex-wrap:wrap'>"+[["activos","En venta"],["vendido","Vendidos"],["todos","Todos"]].map(function(t){return "<button role='tab' data-af='"+t[0]+"' aria-selected='"+(fe===t[0])+"'>"+t[1]+"</button>"}).join("")+"</div>";
-  h+=buscadorHtml("Buscar por marca, modelo, patente o cliente",S.autoQ);
+  h+=buscadorHtml("Buscar por marca, modelo, "+vt.patente.toLowerCase()+" o cliente",S.autoQ);
   h+=lista.map(function(a){var f=(a.fotos||[])[0],u=f&&S.autoUrls[f.ruta],e=estadoAuto(a.estado);
    var q=norm([a.marca,a.modelo,a.anio,a.color,a.patente,a.clientes&&a.clientes.nombre].join(" "));
    return "<button class='card autoCard' data-auto='"+a.id+"' data-q=\""+esc(q)+"\">"+
-    "<div class='autoFoto'>"+(u?"<img src=\""+esc(u)+"\" alt='' loading='lazy'>":ic("car"))+"</div>"+
-    "<div style='flex:1;min-width:0'><b style='font-size:1.05rem'>"+esc(tituloAuto(a))+"</b><br><span class='muted' style='font-size:.88rem'>"+[a.color,a.patente&&String(a.patente).toUpperCase(),a.kilometros!=null&&Number(a.kilometros).toLocaleString("es-AR")+" km"].filter(Boolean).map(esc).join(" · ")+"</span>"+
+    "<div class='autoFoto'>"+(u?"<img src=\""+esc(u)+"\" alt='' loading='lazy'>":ic(esRubroAutos()?"car":"tag"))+"</div>"+
+    "<div style='flex:1;min-width:0'><b style='font-size:1.05rem'>"+esc(tituloAuto(a))+"</b><br><span class='muted' style='font-size:.88rem'>"+[a.color,a.patente&&String(a.patente).toUpperCase(),a.kilometros!=null&&Number(a.kilometros).toLocaleString("es-AR")+" "+vt.med].filter(Boolean).map(esc).join(" · ")+"</span>"+
     (a.clientes?"<br><span class='muted' style='font-size:.85rem'>"+ic("users")+" "+esc(a.clientes.nombre)+"</span>":"")+
-    "<div style='margin-top:6px;display:flex;gap:6px;flex-wrap:wrap'><span class='tag "+e[2]+"'>"+e[1]+"</span><span class='tag'>"+(a.condicion==="consignacion"?"Consignación":"Propio")+"</span></div></div>"+
+    "<div style='margin-top:6px;display:flex;gap:6px;flex-wrap:wrap'><span class='tag "+e[2]+"'>"+e[1]+"</span>"+(a.unidad_estado?"<span class='tag'>"+(a.unidad_estado==="nuevo"?(vt.fem?"Nueva":"Nuevo"):(vt.fem?"Usada":"Usado"))+"</span>":"")+(tipoUnidadTxt(a.tipo_unidad)?"<span class='tag'>"+tipoUnidadTxt(a.tipo_unidad)+"</span>":"")+"<span class='tag'>"+(a.condicion==="consignacion"?"Consignación":"Propio")+"</span></div></div>"+
     "<div style='text-align:right'><span class='muted' style='font-size:.75rem;font-family:var(--f-mono)'>PUBLICACIÓN</span><br><b style='font-family:var(--f-mono)'>"+(a.precio_publicacion!=null?money(a.precio_publicacion):"—")+"</b></div></button>"}).join("")||
-   vacio("car","No hay autos",fe==="vendido"?"Todavía no hay autos vendidos.":"Tocá <b>Auto</b> para cargar el primero.");
-  h+="<p id='sinres' class='muted hide'>No hay autos que coincidan.</p>";
+   vacio(esRubroAutos()?"car":"tag","No hay "+vt.plural,fe==="vendido"?"Todavía no hay "+vt.plural+" vendid"+(vt.fem?"as":"os")+".":"Tocá <b>"+capital(vt.unidad)+"</b> para cargar "+(vt.fem?"la primera":"el primero")+".");
+  h+="<p id='sinres' class='muted hide'>No hay "+vt.plural+" que coincidan.</p>";
   box.innerHTML=h;
   m.querySelectorAll("[data-af]").forEach(function(b){b.onclick=function(){S.autoFiltro=b.dataset.af;pintarAutos()}});
   m.querySelectorAll("[data-auto]").forEach(function(b){b.onclick=function(){irAuto(b.dataset.auto)}});
@@ -51,10 +67,11 @@ function pintarAutos(){
 
 /* ---------- formulario ---------- */
 async function renderAutoForm(){
-  m.innerHTML="<h1>"+(S.autoEdit?"Auto en venta":"Cargar auto en venta")+"</h1><div id='box'>"+skel()+"</div>";
+  var vt=ventaTxt();
+  m.innerHTML="<h1>"+(S.autoEdit?capital(vt.unidad)+" en venta":"Cargar "+vt.unidad+" en venta")+"</h1><div id='box'>"+skel()+"</div>";
   var rc=await sb.from("clientes").select("*").order("nombre");
   S.autoClientes=rc.error?[]:(rc.data||[]);
-  var a={condicion:"propio",estado:"disponible",fotos:[],documentos:[]};
+  var a={condicion:"propio",estado:"disponible",unidad_estado:"usado",fotos:[],documentos:[]};
   if(S.autoEdit){
    var ra=await sb.from("autos_venta").select("*").eq("id",S.autoEdit).single();
    if(ra.error){document.getElementById("box").innerHTML="<div class='status err'>"+esc(ra.error.message)+"</div>";return}
@@ -66,7 +83,7 @@ async function renderAutoForm(){
 }
 function campoAuto(id,lbl,val,extra){return "<div><label for='"+id+"'>"+lbl+"</label><input id='"+id+"' value=\""+esc(val==null?"":val)+"\""+(extra||"")+"></div>"}
 function pintarAutoForm(){
-  var a=S.auto,nuevo=S.autoCliModo==="nuevo",cli=S.autoClientes.filter(function(c){return c.id===a.cliente_id})[0];
+  var vt=ventaTxt(),a=S.auto,nuevo=S.autoCliModo==="nuevo",cli=S.autoClientes.filter(function(c){return c.id===a.cliente_id})[0];
   var h="<div class='card'><h2>Cliente</h2>"+
    "<div class='tabs' role='tablist'><button role='tab' data-acm='existente' aria-selected='"+!nuevo+"'"+(S.autoClientes.length?"":" disabled")+">"+ic("users")+" Cliente cargado</button><button role='tab' data-acm='nuevo' aria-selected='"+nuevo+"'>"+ic("plus")+" Cliente nuevo</button></div>"+
    (nuevo
@@ -83,16 +100,19 @@ function pintarAutoForm(){
    "<div class='g2'>"+campoAuto("aPCli","Precio para el cliente",a.precio_cliente!=null?String(a.precio_cliente).replace(".",","):""," inputmode='decimal'")+
     campoAuto("aPPub","Precio de venta publicación",a.precio_publicacion!=null?String(a.precio_publicacion).replace(".",","):""," inputmode='decimal'")+"</div>"+
    "<div class='lr' style='margin-top:10px'><span class='muted'>Diferencia (ganancia)</span><b id='aDif'></b></div></div>";
-  h+="<div class='card'><h2>Datos del auto</h2>"+
-   "<div class='g2'>"+campoAuto("aMarca","Marca",a.marca," placeholder='Volkswagen'")+campoAuto("aModelo","Modelo",a.modelo," placeholder='Gol Trend 1.6'")+"</div>"+
+  var ue=a.unidad_estado||"usado";
+  h+="<div class='card'><h2>Datos de"+(vt.fem?" la ":"l ")+vt.unidad+"</h2>"+
+   "<div class='g2'><div><label for='aUE'>"+(vt.fem?"Nueva o usada":"Nuevo o usado")+"</label><select id='aUE'><option value='nuevo'"+(ue==="nuevo"?" selected":"")+">"+(vt.fem?"Nueva (0 km)":"Nuevo (0 km)")+"</option><option value='usado'"+(ue==="usado"?" selected":"")+">"+(vt.fem?"Usada":"Usado")+"</option></select></div>"+
+    (vt.tipos?"<div><label for='aTipo'>Tipo</label><select id='aTipo'>"+vt.tipos.map(function(t){return "<option value='"+t[0]+"'"+(a.tipo_unidad===t[0]?" selected":"")+">"+t[1]+"</option>"}).join("")+"</select></div>":"<div></div>")+"</div>"+
+   "<div class='g2'>"+campoAuto("aMarca","Marca",a.marca," placeholder='"+vt.marca+"'")+campoAuto("aModelo","Modelo",a.modelo," placeholder='"+vt.modelo+"'")+"</div>"+
    "<div class='g2'>"+campoAuto("aAnio","Año",a.anio," inputmode='numeric'")+campoAuto("aColor","Color",a.color)+"</div>"+
-   "<div class='g2'>"+campoAuto("aPat","Patente",a.patente," style='text-transform:uppercase' placeholder='AB123CD'")+campoAuto("aKm","Kilómetros",a.kilometros!=null?a.kilometros:""," inputmode='numeric'")+"</div>"+
+   "<div class='g2'>"+campoAuto("aPat",vt.patente,a.patente," style='text-transform:uppercase' placeholder='"+vt.patPh+"'")+campoAuto("aKm",vt.medidor,a.kilometros!=null?a.kilometros:""," inputmode='numeric'")+"</div>"+
    "<label for='aObs'>Observaciones</label><textarea id='aObs'>"+esc(a.observaciones)+"</textarea></div>";
   h+="<div class='card'><h2>Documentación digital (PDF)</h2>"+
    ((a.documentos||[]).map(function(d,i){return "<div class='lr' style='border-top:1px solid var(--line);padding:8px 0'><button class='btn o' data-adoc='"+i+"' style='padding:4px 10px;min-height:0'>"+ic("download")+" "+esc(d.nombre||"Documento")+"</button><button class='btn o icon del' data-adoc-del='"+i+"' style='padding:4px 10px;min-height:0' aria-label='Quitar documento' title='Quitar'>"+ic("trash")+"</button></div>"}).join("")||"")+
    S.autoDocsNuevos.map(function(f){return "<div class='muted' style='padding:4px 0'>"+esc(f.name)+" · se sube al guardar</div>"}).join("")+
-   "<label for='aDocs'>Agregar PDF (título, cédula, 08, VTV, informe de dominio…)</label><input type='file' id='aDocs' accept='application/pdf,.pdf' multiple></div>";
-  h+="<div class='card'><h2>Fotos del vehículo</h2><div class='autoFotos'>"+
+   "<label for='aDocs'>Agregar PDF ("+vt.docs+")</label><input type='file' id='aDocs' accept='application/pdf,.pdf' multiple></div>";
+  h+="<div class='card'><h2>"+vt.fotos+"</h2><div class='autoFotos'>"+
    (a.fotos||[]).map(function(f,i){var u=S.autoUrls[f.ruta];return "<div class='autoMini'>"+(u?"<a href=\""+esc(u)+"\" target='_blank' rel='noopener'><img src=\""+esc(u)+"\" alt='Foto "+(i+1)+"'></a>":ic("image"))+"<button data-afoto-del='"+i+"' aria-label='Quitar foto' title='Quitar foto'>"+ic("trash")+"</button></div>"}).join("")+
    S.autoFotosNuevas.map(function(b,i){return "<div class='autoMini'><img src=\""+b.url+"\" alt='Foto nueva "+(i+1)+"'><span class='tag' style='position:absolute;left:4px;bottom:4px'>Nueva</span></div>"}).join("")+
    "</div><label for='aFotos'>Agregar fotos</label><input type='file' id='aFotos' accept='image/*' multiple></div>";
@@ -130,8 +150,9 @@ async function guardarAuto(){
   bt.disabled=true;
   try{
    var d={condicion:v("aCond"),estado:v("aEst"),precio_cliente:num("aPCli"),precio_publicacion:num("aPPub"),marca:v("aMarca")||null,modelo:v("aModelo")||null,
-    anio:v("aAnio")?parseInt(v("aAnio"),10)||null:null,color:v("aColor")||null,patente:v("aPat")?v("aPat").toUpperCase():null,kilometros:v("aKm")?numAR(v("aKm").replace(/\./g,"")):null,observaciones:v("aObs")||null};
-   if(!d.marca&&!d.modelo&&!d.patente)throw "Cargá al menos la marca, el modelo o la patente.";
+    anio:v("aAnio")?parseInt(v("aAnio"),10)||null:null,color:v("aColor")||null,patente:v("aPat")?v("aPat").toUpperCase():null,kilometros:v("aKm")?numAR(v("aKm").replace(/\./g,"")):null,observaciones:v("aObs")||null,unidad_estado:v("aUE")||"usado"};
+   if(document.getElementById("aTipo"))d.tipo_unidad=v("aTipo");
+   if(!d.marca&&!d.modelo&&!d.patente)throw "Cargá al menos la marca, el modelo o la "+ventaTxt().patente.toLowerCase()+".";
    // cliente
    if(S.autoCliModo==="nuevo"){
     var nom=v("acNom");
@@ -150,6 +171,7 @@ async function guardarAuto(){
    }
    say("aSt","Guardando…");
    var r=a.id?await sb.from("autos_venta").update(d).eq("id",a.id).select().single():await sb.from("autos_venta").insert(Object.assign({taller_id:S.taller.id},d)).select().single();
+   if(r.error&&/unidad_estado|tipo_unidad/.test(r.error.message))throw FALTA_SQL_VENTA2;
    if(r.error)throw /relation|does not exist|schema cache/i.test(r.error.message)?FALTA_SQL_AUTOS:r.error.message;
    var id=r.data.id,docs=(a.documentos||[]).slice(),fotos=(a.fotos||[]).slice(),errores=0;
    for(var i=0;i<S.autoDocsNuevos.length;i++){var f=S.autoDocsNuevos[i];say("aSt","Subiendo documentos ("+(i+1)+" de "+S.autoDocsNuevos.length+")…");
@@ -162,7 +184,7 @@ async function guardarAuto(){
     var ru=await sb.from("autos_venta").update({documentos:docs,fotos:fotos}).eq("id",id);if(ru.error)throw ru.error.message}
    if(S.autoQuitar&&S.autoQuitar.length)await sb.storage.from("documentos").remove(S.autoQuitar);
    S.autoQuitar=null;S.autoFotosNuevas=[];S.autoDocsNuevos=[];
-   if(errores){S.auto=Object.assign(r.data,{documentos:docs,fotos:fotos});S.autoEdit=id;bt.disabled=false;say("aSt","Se guardó el auto, pero "+errores+" archivo(s) no se pudieron subir. Probá agregarlos de nuevo.",true);return}
+   if(errores){S.auto=Object.assign(r.data,{documentos:docs,fotos:fotos});S.autoEdit=id;bt.disabled=false;say("aSt","Se guardó "+(ventaTxt().fem?"la ":"el ")+ventaTxt().unidad+", pero "+errores+" archivo(s) no se pudieron subir. Probá agregarlos de nuevo.",true);return}
    S.vista="autos";route();
   }catch(e){bt.disabled=false;say("aSt",typeof e==="string"?e:"No se pudo guardar.",true)}
 }

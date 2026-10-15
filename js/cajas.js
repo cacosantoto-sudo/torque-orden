@@ -1,4 +1,5 @@
 // Tres cajas de dinero: ingresos, egresos y saldo de cada una, discriminado por medio de pago.
+// Además la división Cheques (js/cheques.js), aparte de las cajas.
 var MEDIOS=[["efectivo","Efectivo"],["transferencia","Transferencia bancaria"],["cheque","Cheque"],["tarjeta","Tarjeta de crédito"],["billetera","Billetera virtual"]];
 // Bancos y billeteras más comunes (se puede escribir cualquier otro)
 var BANCOS=["Mercado Pago","Ualá","Naranja X","Brubank","Personal Pay","Cuenta DNI","MODO","Lemon","Prex","Banco Nación","Banco Provincia","Banco Ciudad","Banco Galicia","Banco Santander","BBVA","Banco Macro","ICBC","Banco Credicoop","Banco Patagonia","Banco Supervielle","HSBC","Banco Hipotecario","Banco Comafi","Banco Itaú","Banco Industrial","Banco Columbia","Banco del Sol","Banco de Córdoba","Banco Santa Fe","Banco Entre Ríos","Banco San Juan","Banco Nación (BNA+)"];
@@ -26,10 +27,11 @@ async function renderCaja(){
    rc=await sb.from("cajas").select("*").order("orden");
   }
   S.cajas=rc.error?null:(rc.data||[]);
-  var rcl=await sb.from("clientes").select("id,nombre,dni_cuit").order("nombre");S.cajaClientes=rcl.error?[]:(rcl.data||[]);
+  var rcl=await sb.from("clientes").select("id,nombre,dni_cuit,telefono").order("nombre");S.cajaClientes=rcl.error?[]:(rcl.data||[]);
   try{S.movs=await traerTodo("movimientos_caja","*, ordenes(numero)")}catch(e){document.getElementById("box").innerHTML=esc(e.message);return}
   S.movs.sort(function(a,b){return String(fechaMov(b)).localeCompare(String(fechaMov(a)))});
-  if(S.cajas&&S.cajas.length&&!S.cajas.some(function(c){return c.id===S.cajaSel})&&S.cajaSel!=="todas")S.cajaSel=S.cajas[0].id;
+  if(S.cajas&&S.cajas.length&&!S.cajas.some(function(c){return c.id===S.cajaSel})&&S.cajaSel!=="todas"&&S.cajaSel!=="cheques")S.cajaSel=S.cajas[0].id;
+  if(S.cajaSel==="cheques")await cargarCheques();
   pintarCaja();
 }
 function saldosPorMedio(movs){
@@ -43,10 +45,17 @@ function pintarCaja(){
   if(!cajas){h+="<div class='status err'>Falta correr el SQL nuevo en Supabase (sql/2026-10-06_5_cajas.sql) para usar las 3 cajas y los medios de pago.</div>"}
   else{
    var tab=function(c){return "<button role='tab' data-caja='"+c.id+"' aria-selected='"+(sel===c.id)+"'>"+esc(c.nombre)+"</button>"};
-   h+="<div class='tabs' role='tablist' style='flex-wrap:wrap'>"+cajas.filter(function(c){return !esBilletera(c)}).map(tab).join("")+"<button role='tab' data-caja='todas' aria-selected='"+(sel==="todas")+"'>Todas</button></div>";
+   h+="<div class='tabs' role='tablist' style='flex-wrap:wrap'>"+cajas.filter(function(c){return !esBilletera(c)}).map(tab).join("")+"<button role='tab' data-caja='todas' aria-selected='"+(sel==="todas")+"'>Todas</button><button role='tab' data-caja='cheques' aria-selected='"+(sel==="cheques")+"'>"+ic("receipt")+" Cheques</button></div>";
    var bills=cajas.filter(esBilletera),hayTipo=cajas.some(function(c){return "tipo" in c});
    h+="<div class='lr' style='margin:4px 0 6px'><span class='muted' style='font-family:var(--f-mono);font-size:.78rem;letter-spacing:.06em;text-transform:uppercase'>Billeteras virtuales</span>"+(hayTipo?"<button class='btn o' id='addBill' style='padding:4px 10px;min-height:0'>"+ic("plus")+" Billetera</button>":"")+"</div>"+
     (bills.length?"<div class='tabs' role='tablist' style='flex-wrap:wrap'>"+bills.map(tab).join("")+"</div>":"<p class='muted' style='margin:0 0 12px;font-size:.9rem'>"+(hayTipo?"Todavía no hay billeteras. Agregá una con el botón.":"Para usar billeteras virtuales (Mercado Pago) falta correr en Supabase el SQL sql/2026-10-14_pagos_tarjeta_billeteras.sql.")+"</p>");
+  }
+  if(sel==="cheques"){
+   box.innerHTML=h+htmlCheques();
+   m.querySelectorAll("[data-caja]").forEach(function(b){b.onclick=function(){S.cajaSel=b.dataset.caja;pintarCaja()}});
+   var ab0=document.getElementById("addBill");if(ab0)ab0.onclick=agregarBilletera;
+   if(!S.cheques){cargarCheques().then(pintarCaja);return}
+   conectarCheques();return;
   }
   var movsCaja=S.movs.filter(function(x){return sel==="todas"||!cajas||x.caja_id===sel});
   var sm=saldosPorMedio(movsCaja),ing=0,egr=0;MEDIOS.forEach(function(md){ing+=sm[md[0]].ing;egr+=sm[md[0]].egr});
@@ -123,10 +132,7 @@ function pintarCaja(){
     document.getElementById("mcliBox").classList.toggle("hide",!(mm.value==="tarjeta"&&mt.value==="ingreso"))};
    mt.onchange=mm.onchange;mm.onchange();
    var mc=document.getElementById("mcli");mc.oninput=function(){var c=clienteCaja(mc.value),cu=document.getElementById("mcuit");if(c&&c.dni_cuit)cu.value=c.dni_cuit}}
-  var ab=document.getElementById("addBill");if(ab)ab.onclick=async function(){
-   var n=prompt("Nombre de la billetera virtual (Ualá, Naranja X, Personal Pay…):","");if(!n||!n.trim())return;
-   var r=await sb.from("cajas").insert({taller_id:S.taller.id,nombre:n.trim(),orden:10+cajas.filter(esBilletera).length+1,tipo:"billetera"}).select().single();
-   if(r.error){alert(r.error.message);return}S.cajaSel=r.data.id;renderCaja()};
+  var ab=document.getElementById("addBill");if(ab)ab.onclick=agregarBilletera;
   if(esBilletera(cajaObj))conectarExtracto(cajaObj);
   m.querySelectorAll("[data-fact]").forEach(function(b){b.onclick=async function(){
    var x=S.movs.filter(function(y){return y.id===b.dataset.fact})[0];if(!x)return;
@@ -150,6 +156,11 @@ function pintarCaja(){
    var r=await sb.from("cajas").update({nombre:n.trim()}).eq("id",cajaObj.id);if(r.error){alert(r.error.message);return}
    cajaObj.nombre=n.trim();pintarCaja()};
   m.querySelectorAll("[data-del-mov]").forEach(function(b){b.onclick=function(){eliminarMovimiento(b.dataset.delMov)}});
+}
+async function agregarBilletera(){
+  var n=prompt("Nombre de la billetera virtual (Ualá, Naranja X, Personal Pay…):","");if(!n||!n.trim())return;
+  var r=await sb.from("cajas").insert({taller_id:S.taller.id,nombre:n.trim(),orden:10+S.cajas.filter(esBilletera).length+1,tipo:"billetera"}).select().single();
+  if(r.error){alert(r.error.message);return}S.cajaSel=r.data.id;renderCaja();
 }
 function eliminarMovimiento(id){
   borrarConDeshacer("Movimiento eliminado",tarjetaDe("[data-del-mov='"+id+"']"),function(){return sb.from("movimientos_caja").delete().eq("id",id)},renderCaja);

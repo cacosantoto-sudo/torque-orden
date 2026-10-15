@@ -6,6 +6,10 @@ VISTAS.vehiculos=renderVehiculos;VISTAS.vehiculoForm=renderVehiculoForm;
 GRUPOS.vehiculos="clientes";GRUPOS.vehiculoForm="clientes";
 
 var COMBUSTIBLES=["Nafta","Diésel","GNC","Nafta / GNC","Híbrido","Eléctrico"];
+function combustiblesTaller(){return esRubroAutos()?COMBUSTIBLES:["Nafta","Eléctrico"]}
+// Ejemplos de los campos según el rubro (en motos no se muestran ejemplos de autos)
+function ejVeh(k){var moto={marca:"Honda",modelo:"CB 250 Twister",motor:"Monocilíndrico 4T",cilindrada:"249 cc",codigo:"MC41E",caja:"5 velocidades"},
+  auto={marca:"Toyota",modelo:"Corolla XEi",motor:"1.8 16v",cilindrada:"1798 cc",codigo:"2ZR-FE",caja:"U341E"};return (esRubroAutos()?auto:moto)[k]}
 function usaMotorEnFicha(){return rubroTaller()!=="nautica"}
 function cajaTxt(t){return t==="automatica"?"Automática":t==="manual"?"Manual":t||""}
 // Nombre corto del vehículo: el nombre cargado, o marca + modelo
@@ -66,16 +70,16 @@ async function renderVehiculoForm(){
   var e=res[0].data||{},clientes=res[1].data||[],auto=usaMotorEnFicha();
   var h="<div class='card'><h2>Datos</h2>"+
    "<label for='v_cliente'>Cliente</label><select id='v_cliente'><option value=''>— elegir —</option>"+clientes.map(function(c){return "<option value='"+c.id+"'"+(c.id===e.cliente_id?" selected":"")+">"+esc(c.nombre)+"</option>"}).join("")+"</select>"+
-   "<div class='g2'><div>"+inputVeh("marca","Marca",e.marca,auto?" placeholder='Toyota'":"")+"</div><div>"+inputVeh("modelo","Modelo",e.modelo,auto?" placeholder='Corolla XEi'":"")+"</div></div>"+
+   "<div class='g2'><div>"+inputVeh("marca","Marca",e.marca,auto?" placeholder='"+ejVeh("marca")+"'":"")+"</div><div>"+inputVeh("modelo","Modelo",e.modelo,auto?" placeholder='"+ejVeh("modelo")+"'":"")+"</div></div>"+
    "<div class='g2'><div>"+inputVeh("anio","Año",e.anio," inputmode='numeric' maxlength='4'")+"</div><div>"+inputVeh("color","Color",e.color)+"</div></div>"+
    "<div class='g2'><div>"+inputVeh("patente",patenteLabel(),e.matricula_patente," autocapitalize='characters' autocomplete='off'")+"</div><div>"+inputVeh("nombre",auto?"Nombre o apodo (opcional)":"Nombre",e.nombre,auto?" placeholder='Si lo dejás vacío se usa marca y modelo'":"")+"</div></div>"+
    inputVeh("vin","N° de chasis / VIN (opcional)",e.vin," autocapitalize='characters' autocomplete='off'")+
    "</div>";
   if(auto)h+="<div class='card'><h2>Motor</h2>"+
-   "<div class='g2'><div>"+inputVeh("motor","Motor",e.motor," placeholder='1.8 16v'")+"</div><div>"+inputVeh("cilindrada","Cilindrada",e.cilindrada," placeholder='1798 cc'")+"</div></div>"+
-   "<div class='g2'><div>"+selectVeh("combustible","Combustible",e.combustible,COMBUSTIBLES)+"</div><div>"+inputVeh("codigo_motor","Código de motor",e.codigo_motor," autocapitalize='characters' placeholder='2ZR-FE'")+"</div></div></div>"+
+   "<div class='g2'><div>"+inputVeh("motor","Motor",e.motor," placeholder='"+ejVeh("motor")+"'")+"</div><div>"+inputVeh("cilindrada","Cilindrada",e.cilindrada," placeholder='"+ejVeh("cilindrada")+"'")+"</div></div>"+
+   "<div class='g2'><div>"+selectVeh("combustible","Combustible",e.combustible,combustiblesTaller())+"</div><div>"+inputVeh("codigo_motor","Código de motor",e.codigo_motor," autocapitalize='characters' placeholder='"+ejVeh("codigo")+"'")+"</div></div></div>"+
    "<div class='card'><h2>Transmisión</h2>"+
-   "<div class='g2'><div>"+selectVeh("caja_tipo","Tipo de caja",e.caja_tipo,[["manual","Manual"],["automatica","Automática"]])+"</div><div>"+inputVeh("caja_modelo","Modelo o código de caja",e.caja_modelo," placeholder='U341E'")+"</div></div></div>";
+   "<div class='g2'><div>"+selectVeh("caja_tipo","Tipo de caja",e.caja_tipo,[["manual","Manual"],["automatica","Automática"]])+"</div><div>"+inputVeh("caja_modelo","Modelo o código de caja",e.caja_modelo," placeholder='"+ejVeh("caja")+"'")+"</div></div></div>";
   h+="<div class='card'><h2>Notas</h2><textarea id='v_notas' placeholder='Cualquier dato útil del "+equipoLabel().toLowerCase()+"'>"+esc(e.notas||"")+"</textarea></div>";
   h+="<div id='st' class='status hide'></div><div class='btns'><button class='btn' id='vGuardar'>Guardar</button><button class='btn o' id='vVolver'>Volver</button></div>";
   document.getElementById("box").outerHTML=h;

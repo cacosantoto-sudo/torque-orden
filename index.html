@@ -182,6 +182,7 @@ table.t{width:100%;border-collapse:collapse;font-size:.9rem}table.t th,table.t t
 <script src="js/ordenes.js"></script>
 <script src="js/neumaticos.js"></script>
 <script src="js/cajas.js"></script>
+<script src="js/cheques.js"></script>
 <script src="js/proveedores.js"></script>
 <script src="js/clientes.js"></script>
 <script src="js/articulos.js"></script>
@@ -214,6 +215,8 @@ function rubroTaller(){return S.taller&&S.taller.rubro||"nautica"}
 function medidorLabel(){return rubroTaller()==="nautica"?"Horas de motor":"Kilómetros"}
 function equipoLabel(){var r=rubroTaller();return r==="motos"?"Moto":r==="autos"?"Auto":"Embarcación"}
 function equipoFem(){return rubroTaller()!=="autos"}
+// Lo que es solo de autos (alineación, ejemplos de autos) no aparece en talleres de motos ni de lanchas
+function esRubroAutos(){return rubroTaller()==="autos"}
 
 /* ---------------- arranque y sesión ---------------- */
 var yaEntro=false;
@@ -253,7 +256,9 @@ async function cargarTalleres(){
   document.getElementById("salir").onclick=function(){sb.auth.signOut()};
   pintarMarca();
   nv.classList.remove("hide");
-  nv.innerHTML=[["panel","Panel","grid"],["clientes","Clientes","users"],["ordenes","Órdenes","clipboard"],["stock","Stock","package"],["proveedores","Proveedores","receipt","Proveed."],["turnos","Turnos","calendar"],["autos","Venta autos","car","Autos"],["mas","Más","menu"]].map(function(x){return "<button data-v='"+x[0]+"' aria-label='"+x[1]+"'>"+ic(x[2])+(x[3]?"<span class='lg'>"+x[1]+"</span><span class='sh' aria-hidden='true'>"+x[3]+"</span>":"<span>"+x[1]+"</span>")+"</button>"}).join("");
+  var dock=[["panel","Panel","grid"],["clientes","Clientes","users"],["ordenes","Órdenes","clipboard"],["stock","Stock","package"],["proveedores","Proveedores","receipt","Proveed."],["turnos","Turnos","calendar"],["autos",ventaTxt().dock,esRubroAutos()?"car":"tag",ventaTxt().dockCorto],["mas","Más","menu"]];
+  nv.style.gridTemplateColumns="repeat("+dock.length+",1fr)";
+  nv.innerHTML=dock.map(function(x){return "<button data-v='"+x[0]+"' aria-label='"+x[1]+"'>"+ic(x[2])+(x[3]?"<span class='lg'>"+x[1]+"</span><span class='sh' aria-hidden='true'>"+x[3]+"</span>":"<span>"+x[1]+"</span>")+"</button>"}).join("");
   nv.querySelectorAll("button").forEach(function(b){b.onclick=function(){S.vista=b.dataset.v;S.orden=null;route()}});
   route();
 }
@@ -310,7 +315,7 @@ function renderCrearTaller(){
 var VISTAS_PLATA={caja:1,reportes:1,proveedores:1,provForm:1,provDetalle:1,compraForm:1,pagoForm:1,provIA:1,neuForm:1,aliForm:1,listas:1,listaIA:1,contabilidad:1,autos:1,autoForm:1};
 function renderBloqueoPlata(){
   m.innerHTML="<h1>Función del plan Plata</h1>"+
-   "<div class='card'><p class='muted' style='margin-top:0'>Las cajas, la contabilidad, los reportes, los proveedores, las listas de precio, la venta de autos y los neumáticos vienen con el plan <b>Plata</b>. Todo lo demás del taller sigue funcionando igual.</p>"+
+   "<div class='card'><p class='muted' style='margin-top:0'>Las cajas y los cheques, la contabilidad, los reportes, los proveedores, las listas de precio"+", la "+ventaTxt().titulo.toLowerCase()+" y los neumáticos vienen con el plan <b>Plata</b>. Todo lo demás del taller sigue funcionando igual.</p>"+
    "<div class='btns'>"+(esDueno()?"<button class='btn' id='irPlan'>Ver los planes</button>":"")+"<button class='btn o' id='irPanel'>Volver</button></div></div>";
   var b=document.getElementById("irPlan");if(b)b.onclick=function(){S.vista="plan";route()};
   document.getElementById("irPanel").onclick=function(){S.vista="panel";route()};
@@ -342,7 +347,8 @@ async function renderPanel(){
   m.innerHTML="<h1>Panel</h1><p class='muted'>"+esc(S.taller.nombre)+"</p><div id='box'>"+skel()+"</div>";
   var r=await sb.from("ordenes").select("id,numero,estado,clientes(nombre)").order("creado",{ascending:false}).limit(8);
   if(r.error){document.getElementById("box").innerHTML=esc(r.error.message);return}
-  var h="<div class='card'><h2>Últimas órdenes</h2>";
+  var h=esDueno()&&nivelPlan()>=1?"<div class='card hide' id='chqBox' role='alert' style='margin-bottom:16px;border-color:var(--bad);background:rgba(255,90,79,.06)'></div>":"";
+  h+="<div class='card'><h2>Últimas órdenes</h2>";
   h+=r.data.length?r.data.map(function(o){var cls=o.estado==="Listo"||o.estado==="Entregado"?"g":o.estado==="En reparación"?"w":"";
     return "<div class='lr' style='border-top:1px solid var(--line);padding:8px 0'><span>OT "+String(o.numero).padStart(6,"0")+" · "+esc(o.clientes?o.clientes.nombre:"")+"</span><span class='tag "+cls+"'>"+esc(o.estado)+"</span></div>"}).join(""):"<p class='muted' style='margin:0'>Todavía no hay órdenes. Tocá <b>Nueva orden</b> para cargar la primera.</p>";
   h+="</div><div class='btns'><button class='btn' id='ir'>Nueva orden</button><button class='btn o' id='irVeh'>"+ic("search")+" Buscar "+equipoLabel().toLowerCase()+"</button><button class='btn o' id='irPat'>"+ic("camera")+" Buscar por "+patenteLabel().toLowerCase()+"</button></div>";
@@ -355,6 +361,7 @@ async function renderPanel(){
   document.getElementById("ir").onclick=function(){S.orden={estado:"Recibido"};S.vista="ordenForm";route()};
   document.getElementById("irPat").onclick=function(){S.vista="patente";route()};
   document.getElementById("irVeh").onclick=function(){S.vista="vehiculos";route()};
+  cargarChequesPanel();
   cargarTortaPanel();
   cargarTurnosHoyPanel();
   cargarSectoresPanel();
@@ -501,7 +508,7 @@ async function renderOrdenes(){
   h+=buscadorHtml("Buscar por N° de OT, cliente, "+equipoLabel().toLowerCase()+" o "+patenteLabel().toLowerCase(),S.qOrdenes);
   var conSector=(r.data||[]).some(function(o){return "sector" in o});
   h+="<div style='margin-bottom:12px;display:grid;grid-template-columns:1fr 1fr;gap:8px'><select id='festado' aria-label='Filtrar por estado' style='grid-column:1/-1'><option value=''>Todos los estados</option>"+ESTADOS.map(function(e){return "<option"+(e===S.fEstado?" selected":"")+">"+e+"</option>"}).join("")+"</select>"+
-   (conSector?"<select id='fsector' aria-label='Filtrar por sector'><option value=''>Todos los sectores</option>"+SECTORES.map(function(e){return "<option"+(e===S.fSector?" selected":"")+">"+e+"</option>"}).join("")+"</select>"+
+   (conSector?"<select id='fsector' aria-label='Filtrar por sector'><option value=''>Todos los sectores</option>"+sectoresTaller().map(function(e){return "<option"+(e===S.fSector?" selected":"")+">"+e+"</option>"}).join("")+"</select>"+
    "<select id='ffact' aria-label='Filtrar por facturación'><option value=''>Facturado: todos</option><option value='si'"+(S.fFact==="si"?" selected":"")+">Facturado: sí</option><option value='no'"+(S.fFact==="no"?" selected":"")+">Facturado: no</option></select>":"")+"</div>";
   h+=(r.data||[]).map(function(o){var cls=o.estado==="Listo"||o.estado==="Entregado"?"g":o.estado==="En reparación"?"w":"";
    var post=(o.estado==="Listo"||o.estado==="Entregado")?"<button class='btn o' data-post='"+o.id+"' style='padding:6px 12px;min-height:0;margin-top:8px'>"+ic("image")+" Post para Instagram</button>":"";
@@ -1286,7 +1293,7 @@ async function ajustarStock(id,delta){
 
 /* ---------------- menú Más ---------------- */
 function renderMas(){
-  var items=(esDueno()?[["caja","Cajas","wallet"],["contabilidad","Contabilidad","chart"],["articulos","Artículos","package"],["listas","Listas de precio","tag"],["reportes","Reportes","chart"],["plan","Mi Plan","crown"],["config","Configuración","sliders"]]:[["articulos","Artículos","package"],["listas","Listas de precio","tag"],["config","Configuración","sliders"]]);
+  var items=(esDueno()?[["caja","Cajas y cheques","wallet"],["contabilidad","Contabilidad","chart"],["articulos","Artículos","package"],["listas","Listas de precio","tag"],["reportes","Reportes","chart"],["plan","Mi Plan","crown"],["config","Configuración","sliders"]]:[["articulos","Artículos","package"],["listas","Listas de precio","tag"],["config","Configuración","sliders"]]);
   m.innerHTML="<h1>Más</h1><div style='height:14px'></div>"+items.map(function(x){var trabado=VISTAS_PLATA[x[0]]&&nivelPlan()<1;
     return "<button class='fila' data-v='"+x[0]+"'>"+ic(x[2])+"<span>"+x[1]+(trabado?" <span class='tag plata'>PLATA</span>":"")+"</span>"+ic("chevron")+"</button>"}).join("")+
    "<button class='fila' data-v='patente'>"+ic("camera")+"<span>Buscar por "+patenteLabel().toLowerCase()+"</span>"+ic("chevron")+"</button>";
@@ -1373,7 +1380,7 @@ function renderPlan(){
            "Cajas: ingresos, egresos y medio de pago",
            "Reportes del taller",
            "Proveedores, compras y cuenta corriente",
-           "Neumáticos y alineaciones"],
+           "Cheques en cartera, con aviso antes del vencimiento"].concat(rubroTaller()==="nautica"?[]:[esRubroAutos()?"Neumáticos y alineaciones":"Neumáticos"]),
    oro:   ["Todo lo del plan Plata",
            "Completar los campos de la orden con IA, a partir de lo que dictás",
            "Leer los datos de una foto con IA",
@@ -1487,7 +1494,7 @@ function nombreArchivo(ext){return "torque-orden_"+norm(S.taller.nombre).replace
 async function exportarJson(){
   say("expSt","Preparando la copia…");
   try{
-   var tablas=["clientes","equipos","motores","ordenes","presupuestos","repuestos","movimientos_caja","fotos","mantenimientos","neumaticos","alineaciones","cajas","proveedores","compras","compra_items","pagos_proveedor","pago_aplicaciones"],datos={};
+   var tablas=["clientes","equipos","motores","ordenes","presupuestos","repuestos","movimientos_caja","fotos","mantenimientos","neumaticos","alineaciones","cajas","proveedores","compras","compra_items","pagos_proveedor","pago_aplicaciones","cheques"],datos={};
    // las tablas nuevas pueden no existir todavía si falta correr algún SQL
    for(var i=0;i<tablas.length;i++){try{datos[tablas[i]]=await traerTodo(tablas[i])}catch(e){if(i<8)throw e;datos[tablas[i]]=[]}}
    var total=tablas.reduce(function(s,t){return s+datos[t].length},0);
