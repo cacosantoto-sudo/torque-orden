@@ -203,7 +203,7 @@ var ICONS={grid:'<rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="
 function ic(n){return "<svg class='ic' viewBox='0 0 24 24' aria-hidden='true' focusable='false'>"+(ICONS[n]||"")+"</svg>"}
 function skel(n,h){var o="";for(var i=0;i<(n||3);i++)o+="<div class='sk' style='height:"+(h||84)+"px'></div>";return "<div aria-busy='true' aria-label='Cargando'>"+o+"</div>"}
 function vacio(icono,titulo,texto){return "<div class='vacio'>"+ic(icono)+"<b>"+titulo+"</b>"+(texto?"<p>"+texto+"</p>":"")+"</div>"}
-function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
+function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
 function norm(s){return String(s==null?"":s).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"")}
 function buscadorHtml(ph,val){return "<input id='buscar' type='search' aria-label='"+ph+"' placeholder='"+ph+"' value=\""+esc(val||"")+"\" autocomplete='off' style='margin-bottom:12px'>"}
 function filtrarLista(txt,extra){
@@ -1366,8 +1366,12 @@ function pintarReportes(){
 }
 
 /* ---------------- mi plan ---------------- */
-function renderPlan(){
+async function renderPlan(){
   var actual=planTaller(),nivel=nivelPlan();
+  /* Subir de plan lo hace solo el administrador del sistema (bajar, cualquier dueño).
+     Si la base todavía no tiene la función, se deja como antes. */
+  var adm=await sb.rpc("soy_admin_sistema"),puedeSubir=adm.error?true:!!adm.data;
+  if(S.vista!=="plan")return;
   var INCLUYE={
    gratis:["Clientes, vehículos y motores sin límite",
            "Órdenes de trabajo, con dictado por voz (se escribe solo lo que decís)",
@@ -1397,10 +1401,11 @@ function renderPlan(){
    h+="<div class='card'"+(esActual?" style='border-color:var(--ac)'":"")+">";
    h+="<div class='lr'><h2 style='margin:0'>Plan "+p.nombre+"</h2>"+(esActual?"<span class='tag g'>ACTUAL</span>":"")+"</div>";
    h+="<ul style='margin:10px 0 0;padding-left:20px;color:var(--mute)'>"+INCLUYE[p.id].map(function(x){return "<li>"+x+"</li>"}).join("")+"</ul>";
-   if(!esActual)h+="<div class='btns'><button class='btn"+(p.nivel<nivel?" o":"")+"' data-plan='"+p.id+"'>"+(p.nivel>nivel?"Pasar al plan "+p.nombre:"Bajar al plan "+p.nombre)+"</button></div>";
+   if(!esActual&&p.nivel>nivel&&!puedeSubir)h+="<p class='muted' style='margin:10px 0 0'>Para pasar al plan "+p.nombre+", pedile la activación a Torque &amp; Orden.</p>";
+   else if(!esActual)h+="<div class='btns'><button class='btn"+(p.nivel<nivel?" o":"")+"' data-plan='"+p.id+"'>"+(p.nivel>nivel?"Pasar al plan "+p.nombre:"Bajar al plan "+p.nombre)+"</button></div>";
    h+="</div>";
   });
-  h+="<p class='muted' style='margin-top:10px'>Por ahora el plan lo cambiás vos mismo, para poder probar todo. Cuando el sistema se venda a otros talleres, esto va a quedar atado a un cobro real (por ejemplo con Mercado Pago).</p>";
+  h+="<p class='muted' style='margin-top:10px'>"+(puedeSubir?"Como administrador del sistema podés cambiar el plan de este taller cuando quieras.":"Los planes Plata y Oro los activa Torque &amp; Orden. Bajar de plan lo podés hacer vos.")+"</p>";
   m.innerHTML=h;
   m.querySelectorAll("[data-plan]").forEach(function(b){
    b.onclick=async function(){
