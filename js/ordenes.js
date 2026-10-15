@@ -4,6 +4,8 @@ var VISTAS=window.VISTAS||(window.VISTAS={}),GRUPOS=window.GRUPOS||(window.GRUPO
 VISTAS.presupuestos=renderPresupuestos;GRUPOS.presupuestos="ordenes";
 
 var SECTORES=["Servicio","Mecánica liviana","Mecánica pesada","Neumáticos – Alineación","Neumáticos – Balanceo","Neumáticos – Montaje","Lavado"];
+// Sectores según el rubro: la alineación es solo de autos y las lanchas no tienen sectores de neumáticos
+function sectoresTaller(){var r=rubroTaller();return SECTORES.filter(function(s){return r==="autos"||(r==="motos"?s!=="Neumáticos – Alineación":s.indexOf("Neumáticos")<0)})}
 var ESTADOS_PRESU=["Pendiente","Aprobado","Parcialmente aprobado","Rechazado","Realizado"];
 function clsEstadoPresu(e){return {"Aprobado":"g","Realizado":"g","Parcialmente aprobado":"w","Rechazado":"bad"}[e]||""}
 function estadoPresu(p){return p?(p.estado||(p.aprobado?"Aprobado":"Pendiente")):""}
@@ -62,8 +64,8 @@ async function renderPresupuestos(){
 /* ---------- sector, facturación y factura en la orden ---------- */
 function ordenExtrasHtml(o){
   var h="<div class='card'><h2>Taller y facturación</h2>"+
-   "<label for='f_sector'>Sector donde está el "+equipoLabel().toLowerCase()+"</label><select id='f_sector'><option value=''>— sin asignar —</option>"+SECTORES.map(function(s){return "<option"+(o.sector===s?" selected":"")+">"+s+"</option>"}).join("")+
-   (o.sector&&SECTORES.indexOf(o.sector)<0?"<option selected>"+esc(o.sector)+"</option>":"")+"</select>"+
+   "<label for='f_sector'>Sector donde está el "+equipoLabel().toLowerCase()+"</label><select id='f_sector'><option value=''>— sin asignar —</option>"+sectoresTaller().map(function(s){return "<option"+(o.sector===s?" selected":"")+">"+s+"</option>"}).join("")+
+   (o.sector&&sectoresTaller().indexOf(o.sector)<0?"<option selected>"+esc(o.sector)+"</option>":"")+"</select>"+
    "<label class='lr' style='justify-content:flex-start;gap:10px;margin-top:16px;text-transform:none;letter-spacing:0;font-family:var(--f-body);font-size:1rem;color:var(--ink)'><input type='checkbox' id='f_facturado'"+(o.facturado?" checked":"")+" style='width:24px;min-height:24px'> <span><b>Facturado</b><br><span class='muted' style='font-size:.88rem'>Marcalo cuando emitiste el comprobante</span></span></label>"+
    "<label for='f_factura_numero'>N° de factura (opcional)</label><input id='f_factura_numero' value=\""+esc(o.factura_numero||"")+"\" placeholder='0001-00001234'>"+
    "<div id='facBox' style='margin-top:14px'>"+(o.id?"":"<p class='muted' style='margin:0'>Guardá la orden para adjuntar el PDF de la factura.</p>")+"</div></div>";
@@ -128,7 +130,7 @@ async function cargarSectoresPanel(){
   if(r.error||!(r.data||[]).some(function(o){return "sector" in o})){box.remove();return}
   var vig=(r.data||[]).slice().sort(function(a,b){return String(a.creado).localeCompare(String(b.creado))});
   var grupos={};vig.forEach(function(o){var s=o.sector||"Sin sector asignado";(grupos[s]=grupos[s]||[]).push(o)});
-  var orden=SECTORES.concat(Object.keys(grupos).filter(function(s){return SECTORES.indexOf(s)<0}));
+  var orden=sectoresTaller().concat(Object.keys(grupos).filter(function(s){return sectoresTaller().indexOf(s)<0}));
   var h="<h2>Órdenes vigentes</h2><p class='muted' style='margin:-4px 0 8px;font-size:.9rem'>"+vig.length+" "+(vig.length===1?equipoLabel().toLowerCase():equipoPlural())+" en el taller, por sector. Primero los que llevan más días.</p>";
   var filas=orden.filter(function(s){return grupos[s]}).map(function(s){
    return "<div style='border-top:1px solid var(--line);padding:8px 0'><div class='lr'><b style='font-family:var(--f-head);text-transform:uppercase;letter-spacing:.05em'>"+esc(s)+"</b><span class='tag'>"+grupos[s].length+"</span></div>"+

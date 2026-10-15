@@ -30,6 +30,7 @@ function fichaNeumaticosHtml(neus,alis){
     return "<button class='item' data-neu='"+n.id+"' style='border-top:1px solid var(--line);padding:8px 0;font-size:.92rem'><span><b style='font-family:var(--f-body)'>"+fechaAR(n.fecha)+" · "+esc(n.posicion)+"</b> <span class='muted'>"+(n.evento==="colocacion"?"Colocación":"Control")+"</span><br>"+
      "<span class='muted'>"+esc([n.marca,n.modelo,n.medida,n.vida_pct!=null?n.vida_pct+"%":"",n.km?kmTxt(n.km):""].filter(Boolean).join(" · "))+"</span></span><span class='muted'>›</span></button>"}).join("")+"</details>";
   h+="</div>";
+  if(!esRubroAutos())return h;
   h+="<div class='card'><div class='lr'><h2 style='margin:0'>Alineaciones</h2><button class='btn o' id='fAli' style='padding:6px 12px;min-height:0'>"+ic("plus")+" Alineación</button></div>"+
    ((alis||[]).length?alis.map(function(a){var v=a.valores||{},vals=CAMPOS_ALI.filter(function(c){return v[c[0]]!=null&&v[c[0]]!==""}).map(function(c){return (c[2]==="Delantero"?"Del. ":"Tras. ")+c[1].toLowerCase()+": "+v[c[0]]});
     return "<button class='item' data-ali='"+a.id+"' style='border-top:1px solid var(--line);padding:10px 0;margin-top:6px'><span><b style='font-family:var(--f-body)'>"+fechaAR(a.fecha)+"</b>"+(a.km?" <span class='muted'>· "+kmTxt(a.km)+"</span>":"")+
