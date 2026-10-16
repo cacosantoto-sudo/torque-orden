@@ -35,7 +35,7 @@ async function renderPresupuestos(){
   var lista=(r.data||[]).filter(function(p){return p.ordenes});
   var pag=await pagadoPorPresupuesto(lista.map(function(p){return p.id}))||{};
   if(!document.getElementById("box"))return;
-  var h=buscadorHtml("Buscar por N°, cliente, "+equipoLabel().toLowerCase()+" o trabajo",S.qPresu)+
+  var h=(esRubroNautica()?"<div class='btns' style='margin-bottom:12px'><button class='btn' id='pegarPresu'>"+ic("clipboard")+" Pegar presupuesto escrito</button></div>":"")+buscadorHtml("Buscar por N°, cliente, "+equipoLabel().toLowerCase()+" o trabajo",S.qPresu)+
    "<select id='fpresu' aria-label='Filtrar por estado' style='margin-bottom:12px'><option value=''>Todos los estados</option>"+ESTADOS_PRESU.map(function(e){return "<option"+(e===S.fPresu?" selected":"")+">"+e+"</option>"}).join("")+"</select>";
   var tot={};
   h+=lista.map(function(p){
@@ -59,6 +59,7 @@ async function renderPresupuestos(){
   bp.oninput=aplicar;fp.onchange=aplicar;aplicar();
   m.querySelectorAll("[data-presu-o]").forEach(function(b){b.onclick=function(){S.volverPresu="presupuestos";abrirPresupuesto(b.dataset.presuO)}});
   m.querySelectorAll("[data-pago-presu]").forEach(function(b){b.onclick=function(){abrirPagoACuenta(b.dataset.pagoPresu,"presupuestos")}});
+  var pp=document.getElementById("pegarPresu");if(pp)pp.onclick=function(){S.pegado=null;S.vista="presuTexto";route();window.scrollTo(0,0)};
 }
 
 /* ---------- sector, facturación y factura en la orden ---------- */
