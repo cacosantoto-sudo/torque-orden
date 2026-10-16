@@ -58,7 +58,7 @@ function proximo(mants){
   var M=document.getElementById("m");
   if(!token){M.textContent="Falta el código del QR.";return}
   var r=await sb.rpc("ficha_publica",{p_token:token});
-  if(r.error||!r.data){M.textContent="No se encontró el vehículo.";return}
+  if(r.error||!r.data){M.textContent="No se encontró la ficha.";return}
   var d=r.data,t=d.taller||{},v=d.vehiculo||{},naut=t.rubro==="nautica";
   var url=location.origin+location.pathname.replace(/etiqueta\.html$/,"")+"ficha.html?t="+token;
   var qr=qrcode(0,"M");qr.addData(url);qr.make();

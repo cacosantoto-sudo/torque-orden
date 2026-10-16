@@ -52,12 +52,12 @@ function pintarAutos(){
   h+=lista.map(function(a){var f=(a.fotos||[])[0],u=f&&S.autoUrls[f.ruta],e=estadoAuto(a.estado);
    var q=norm([a.marca,a.modelo,a.anio,a.color,a.patente,a.clientes&&a.clientes.nombre].join(" "));
    return "<button class='card autoCard' data-auto='"+a.id+"' data-q=\""+esc(q)+"\">"+
-    "<div class='autoFoto'>"+(u?"<img src=\""+esc(u)+"\" alt='' loading='lazy'>":ic(esRubroAutos()?"car":"tag"))+"</div>"+
+    "<div class='autoFoto'>"+(u?"<img src=\""+esc(u)+"\" alt='' loading='lazy'>":ic(equipoIcon()))+"</div>"+
     "<div style='flex:1;min-width:0'><b style='font-size:1.05rem'>"+esc(tituloAuto(a))+"</b><br><span class='muted' style='font-size:.88rem'>"+[a.color,a.patente&&String(a.patente).toUpperCase(),a.kilometros!=null&&Number(a.kilometros).toLocaleString("es-AR")+" "+vt.med].filter(Boolean).map(esc).join(" · ")+"</span>"+
     (a.clientes?"<br><span class='muted' style='font-size:.85rem'>"+ic("users")+" "+esc(a.clientes.nombre)+"</span>":"")+
     "<div style='margin-top:6px;display:flex;gap:6px;flex-wrap:wrap'><span class='tag "+e[2]+"'>"+e[1]+"</span>"+(a.unidad_estado?"<span class='tag'>"+(a.unidad_estado==="nuevo"?(vt.fem?"Nueva":"Nuevo"):(vt.fem?"Usada":"Usado"))+"</span>":"")+(tipoUnidadTxt(a.tipo_unidad)?"<span class='tag'>"+tipoUnidadTxt(a.tipo_unidad)+"</span>":"")+"<span class='tag'>"+(a.condicion==="consignacion"?"Consignación":"Propio")+"</span></div></div>"+
     "<div style='text-align:right'><span class='muted' style='font-size:.75rem;font-family:var(--f-mono)'>PUBLICACIÓN</span><br><b style='font-family:var(--f-mono)'>"+(a.precio_publicacion!=null?money(a.precio_publicacion):"—")+"</b></div></button>"}).join("")||
-   vacio(esRubroAutos()?"car":"tag","No hay "+vt.plural,fe==="vendido"?"Todavía no hay "+vt.plural+" vendid"+(vt.fem?"as":"os")+".":"Tocá <b>"+capital(vt.unidad)+"</b> para cargar "+(vt.fem?"la primera":"el primero")+".");
+   vacio(equipoIcon(),"No hay "+vt.plural,fe==="vendido"?"Todavía no hay "+vt.plural+" vendid"+(vt.fem?"as":"os")+".":"Tocá <b>"+capital(vt.unidad)+"</b> para cargar "+(vt.fem?"la primera":"el primero")+".");
   h+="<p id='sinres' class='muted hide'>No hay "+vt.plural+" que coincidan.</p>";
   box.innerHTML=h;
   m.querySelectorAll("[data-af]").forEach(function(b){b.onclick=function(){S.autoFiltro=b.dataset.af;pintarAutos()}});
@@ -102,7 +102,7 @@ function pintarAutoForm(){
    "<div class='lr' style='margin-top:10px'><span class='muted'>Diferencia (ganancia)</span><b id='aDif'></b></div></div>";
   var ue=a.unidad_estado||"usado";
   h+="<div class='card'><h2>Datos de"+(vt.fem?" la ":"l ")+vt.unidad+"</h2>"+
-   "<div class='g2'><div><label for='aUE'>"+(vt.fem?"Nueva o usada":"Nuevo o usado")+"</label><select id='aUE'><option value='nuevo'"+(ue==="nuevo"?" selected":"")+">"+(vt.fem?"Nueva (0 km)":"Nuevo (0 km)")+"</option><option value='usado'"+(ue==="usado"?" selected":"")+">"+(vt.fem?"Usada":"Usado")+"</option></select></div>"+
+   "<div class='g2'><div><label for='aUE'>"+(vt.fem?"Nueva o usada":"Nuevo o usado")+"</label><select id='aUE'><option value='nuevo'"+(ue==="nuevo"?" selected":"")+">"+(vt.fem?"Nueva":"Nuevo")+" (0 "+vt.med+")"+"</option><option value='usado'"+(ue==="usado"?" selected":"")+">"+(vt.fem?"Usada":"Usado")+"</option></select></div>"+
     (vt.tipos?"<div><label for='aTipo'>Tipo</label><select id='aTipo'>"+vt.tipos.map(function(t){return "<option value='"+t[0]+"'"+(a.tipo_unidad===t[0]?" selected":"")+">"+t[1]+"</option>"}).join("")+"</select></div>":"<div></div>")+"</div>"+
    "<div class='g2'>"+campoAuto("aMarca","Marca",a.marca," placeholder='"+vt.marca+"'")+campoAuto("aModelo","Modelo",a.modelo," placeholder='"+vt.modelo+"'")+"</div>"+
    "<div class='g2'>"+campoAuto("aAnio","Año",a.anio," inputmode='numeric'")+campoAuto("aColor","Color",a.color)+"</div>"+

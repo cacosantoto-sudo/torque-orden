@@ -29,6 +29,7 @@ h2::before{content:"";width:4px;height:1em;background:var(--ac);border-radius:2p
 .plate{display:inline-flex;flex-direction:column;background:#fff;color:#111;border:2px solid #111;border-radius:6px;overflow:hidden;font-family:"JetBrains Mono",monospace;font-weight:600;line-height:1;margin-top:10px}
 .plate::before{content:"ARGENTINA";background:#1d3fa6;color:#fff;font:700 .5rem/1.5 "Barlow",sans-serif;letter-spacing:.2em;text-align:center}
 .plate span{padding:4px 10px 5px;letter-spacing:.12em;font-size:1.25rem}
+.plate.mat::before{display:none}
 .fila{display:flex;justify-content:space-between;gap:12px;border-top:1px solid var(--line);padding:7px 0}
 .fila:first-of-type{border-top:0}
 .fila b{text-align:right}
@@ -64,7 +65,9 @@ var CFG=window.SCOTTO_CONFIG;
 var sb=window.supabase.createClient(CFG.SUPABASE_URL,CFG.SUPABASE_ANON_KEY);
 function urlWeb(u){u=String(u||"").trim();return /^https?:\/\//i.test(u)?u:""}
 function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
-var NAUT=false;
+var NAUT=false,RUBRO="nautica";
+function autos(){return RUBRO==="autos"}
+function equipo(){return RUBRO==="motos"?"moto":RUBRO==="autos"?"vehículo":"embarcación"}
 function km(n){return n==null||n===""?"":Number(n).toLocaleString("es-AR")+(NAUT?" h":" km")}
 function fecha(f){if(!f)return "";var d=String(f).length===10?new Date(f+"T12:00:00"):new Date(f);return isNaN(d)?String(f):d.toLocaleDateString("es-AR")}
 function mesAnio(f){if(!f)return "";var t=new Date(String(f).slice(0,10)+"T12:00:00").toLocaleDateString("es-AR",{month:"long",year:"numeric"});return t.charAt(0).toUpperCase()+t.slice(1)}
@@ -75,7 +78,7 @@ function fila(a,b){return b==null||b===""?"":"<div class='fila'><span class='mut
 function estado(p,kmAct){
   var dias=p.proximo_fecha?Math.round((new Date(p.proximo_fecha+"T12:00:00")-hoy())/864e5):null,falta=p.proximo_km&&kmAct?p.proximo_km-kmAct:null;
   if((dias!=null&&dias<0)||(falta!=null&&falta<=0))return ["bad","Vencido"];
-  if((dias!=null&&dias<=30)||(falta!=null&&falta<=1000))return ["w","Por vencer"];
+  if((dias!=null&&dias<=30)||(falta!=null&&falta<=(NAUT?10:RUBRO==="motos"?500:1000)))return ["w","Por vencer"];
   return ["g","Al día"];
 }
 function detalle(x){
@@ -83,7 +86,9 @@ function detalle(x){
   if(x.tipo==="aceite"){
    var ac=[d.aceite_marca,d.aceite_tipo].filter(Boolean).join(" ");
    if(ac)L.push(["Aceite",ac]);if(d.viscosidad)L.push(["Viscosidad",d.viscosidad]);if(d.litros)L.push(["Cantidad",String(d.litros).replace(".",",")+" litros"]);
-   [["filtro_aceite","Filtro de aceite"],["filtro_aire","Filtro de aire"],["filtro_habitaculo","Filtro de habitáculo"],["filtro_combustible","Filtro de combustible"]].forEach(function(f){L.push([f[1],d[f[0]]?"✔ "+d[f[0]]:"—"])});
+   // en motos y náutica no van los filtros de autos (habitáculo; aire en náutica), salvo que se hayan cargado
+   [["filtro_aceite","Filtro de aceite"],["filtro_aire","Filtro de aire"],["filtro_habitaculo","Filtro de habitáculo"],["filtro_combustible","Filtro de combustible"]].forEach(function(f){
+    if(!autos()&&!d[f[0]]&&(f[0]==="filtro_habitaculo"||(NAUT&&f[0]==="filtro_aire")))return;L.push([f[1],d[f[0]]?"✔ "+d[f[0]]:"—"])});
   }else if(x.tipo==="caja"){if(d.atf)L.push(["Aceite ATF",d.atf]);if(d.litros)L.push(["Cantidad",String(d.litros).replace(".",",")+" litros"]);L.push(["Filtro reemplazado",d.filtro?"✔ "+d.filtro:"No"])}
   else if(x.tipo==="distribucion"){var c=(d.componentes||[]).concat(d.otros?[d.otros]:[]);if(c.length)L.push(["Componentes reemplazados",c.join(", ")])}
   else if(d.descripcion)L.push(["Trabajo",d.descripcion]);
@@ -97,17 +102,17 @@ function detalle(x){
   var M=document.getElementById("m");
   if(!token){M.innerHTML="<main><p style='padding-top:40px'>Falta el código del QR.</p></main>";return}
   var r=await sb.rpc("ficha_publica",{p_token:token});
-  if(r.error||!r.data){M.innerHTML="<main><p style='padding-top:40px'>No encontramos la ficha de este vehículo.</p></main>";return}
+  if(r.error||!r.data){M.innerHTML="<main><p style='padding-top:40px'>No encontramos esta ficha.</p></main>";return}
   var d=r.data,t=d.taller||{},v=d.vehiculo||{},kmAct=d.km_actual;
-  NAUT=t.rubro==="nautica";
-  var titulo=v.nombre||[v.marca,v.modelo].filter(Boolean).join(" ")||"Vehículo";
+  RUBRO=t.rubro||"nautica";NAUT=RUBRO==="nautica";
+  var titulo=v.nombre||[v.marca,v.modelo].filter(Boolean).join(" ")||(NAUT?"Embarcación":RUBRO==="motos"?"Moto":"Vehículo");
   document.title=titulo+" · Libro de mantenimiento";
   var h="<div class='top'>"+(t.logo?"<img src='"+esc(t.logo)+"' alt='' data-recortar>":"")+"<b>"+esc(t.nombre)+"</b><span>Libro de mantenimiento digital</span></div><main>";
-  h+="<div class='veh'><h1>"+esc(titulo)+"</h1><div class='muted'>"+esc([v.nombre&&v.marca&&v.nombre.toLowerCase()!==[v.marca,v.modelo].filter(Boolean).join(" ").toLowerCase()?[v.marca,v.modelo].filter(Boolean).join(" "):"",v.anio,v.color].filter(Boolean).join(" · "))+"</div>"+(v.patente?"<div class='plate'><span>"+esc(v.patente)+"</span></div>":"")+"</div>"+"%%NAV%%";
+  h+="<div class='veh'><h1>"+esc(titulo)+"</h1><div class='muted'>"+esc([v.nombre&&v.marca&&v.nombre.toLowerCase()!==[v.marca,v.modelo].filter(Boolean).join(" ").toLowerCase()?[v.marca,v.modelo].filter(Boolean).join(" "):"",v.anio,v.color].filter(Boolean).join(" · "))+"</div>"+(v.patente?"<div class='plate"+(NAUT?" mat":"")+"'><span>"+esc(v.patente)+"</span></div>":"")+"</div>"+"%%NAV%%";
   var secciones=[];
   // próximos
   var ultimo={};(d.mantenimientos||[]).forEach(function(x){if(x.tipo!=="otro"&&!ultimo[x.tipo])ultimo[x.tipo]=x});
-  var prox=["aceite","caja","distribucion"].filter(function(k){return ultimo[k]&&(ultimo[k].proximo_km||ultimo[k].proximo_fecha)});
+  var prox=(autos()?["aceite","caja","distribucion"]:["aceite"]).filter(function(k){return ultimo[k]&&(ultimo[k].proximo_km||ultimo[k].proximo_fecha)});
   if(prox.length){secciones.push(["proximos","Próximos"]);
    h+="<div class='card' id='proximos'><h2>Próximos servicios</h2><div class='prox'>"+prox.map(function(k){var p=ultimo[k],e=estado(p,kmAct);
     return "<div class='px "+e[0]+"'><h3><span>"+TIPOS[k][0]+" "+TIPOS[k][1]+"</span><span class='tag "+e[0]+"'>"+e[1]+"</span></h3>"+
@@ -115,11 +120,11 @@ function detalle(x){
     (kmAct?"<p class='muted' style='margin:10px 0 0;font-size:.9rem'>Último "+(NAUT?"registro de horas":"kilometraje registrado")+": "+km(kmAct)+"</p>":"")+"</div>";
   }
   // datos
-  secciones.push(["datos","Vehículo"]);
-  h+="<div class='card' id='datos'><h2>Datos del vehículo</h2>"+fila("Marca",v.marca)+fila("Modelo",v.modelo)+fila("Año",v.anio)+fila("Color",v.color)+fila(NAUT?"Matrícula":"Patente",v.patente)+"</div>";
+  secciones.push(["datos",NAUT?"Embarcación":RUBRO==="motos"?"Moto":"Vehículo"]);
+  h+="<div class='card' id='datos'><h2>Datos "+(NAUT||RUBRO==="motos"?"de la ":"del ")+equipo()+"</h2>"+fila("Marca",v.marca)+fila("Modelo",v.modelo)+fila("Año",v.anio)+fila("Color",v.color)+fila(NAUT?"Matrícula":"Patente",v.patente)+"</div>";
   var mot=fila("Motor",v.motor)+fila("Cilindrada",v.cilindrada)+fila("Combustible",v.combustible)+fila("Código de motor",v.codigo_motor)+(d.motores||[]).map(function(mo){return fila("Motor",[mo.marca,mo.modelo].filter(Boolean).join(" "))}).join("");
-  var caja=fila("Tipo de caja",v.caja_tipo==="automatica"?"Automática":v.caja_tipo==="manual"?"Manual":v.caja_tipo)+fila("Modelo / código de caja",v.caja_modelo);
-  if(mot||caja)h+="<div class='card'><h2>Motor y transmisión</h2>"+mot+caja+"</div>";
+  var caja=!autos()?"":fila("Tipo de caja",v.caja_tipo==="automatica"?"Automática":v.caja_tipo==="manual"?"Manual":v.caja_tipo)+fila("Modelo / código de caja",v.caja_modelo);
+  if(mot||caja)h+="<div class='card'><h2>"+(caja?"Motor y transmisión":"Motor")+"</h2>"+mot+caja+"</div>";
   // services
   var mants=d.mantenimientos||[];
   if(mants.length){secciones.push(["services","Services"]);
@@ -143,7 +148,7 @@ function detalle(x){
      (p.items&&p.items.length?"<ul>"+p.items.map(function(it){return "<li>"+esc(it)+"</li>"}).join("")+"</ul>":"")+"<div style='margin-top:6px'>Total: <b>"+money(p.total)+"</b></div></div>"}).join("")+"</div>";
   }
   // neumáticos
-  var neu=d.neumaticos||[];
+  var neu=NAUT?[]:d.neumaticos||[];
   if(neu.length){secciones.push(["neumaticos","Neumáticos"]);
    var act={};neu.forEach(function(n){if(!act[n.posicion])act[n.posicion]=n});
    h+="<div class='card' id='neumaticos'><h2>Neumáticos</h2>"+Object.keys(act).map(function(k){var n=act[k],vida=n.vida_pct,cl=vida==null?"":vida<=15?"bad":vida<=30?"w":"";
@@ -154,7 +159,7 @@ function detalle(x){
      return "<tr><td>"+fecha(n.fecha)+"</td><td>"+esc(n.posicion)+"</td><td>"+esc([n.evento==="colocacion"?"Colocación":"Control",n.marca,n.medida,n.vida_pct!=null?n.vida_pct+"%":"",n.km?km(n.km):"",n.observaciones].filter(Boolean).join(" · "))+"</td></tr>"}).join("")+"</table></details></div>";
   }
   // alineaciones
-  var ali=d.alineaciones||[];
+  var ali=autos()?d.alineaciones||[]:[];
   if(ali.length){secciones.push(["alineaciones","Alineaciones"]);
    var ETQ={del_caida_izq:"Caída del. izq.",del_caida_der:"Caída del. der.",del_conv:"Convergencia del.",del_avance_izq:"Avance izq.",del_avance_der:"Avance der.",tra_caida_izq:"Caída tras. izq.",tra_caida_der:"Caída tras. der.",tra_conv:"Convergencia tras."};
    h+="<div class='card' id='alineaciones'><h2>Alineaciones</h2>"+ali.map(function(a){var vals=a.valores||{};
@@ -167,7 +172,7 @@ function detalle(x){
    kms.sort(function(a,b){return String(b[0]).localeCompare(String(a[0]))});
    h+="<div class='card' id='km'><h2>"+(NAUT?"Horas registradas":"Kilometraje en cada visita")+"</h2><table class='tabla'><tr><th>Fecha</th><th>"+(NAUT?"Horas":"Km")+"</th><th>Visita</th></tr>"+kms.map(function(k){return "<tr><td>"+fecha(k[0])+"</td><td class='mono'>"+km(k[1])+"</td><td>"+esc(k[2])+"</td></tr>"}).join("")+"</table></div>";
   }
-  if(!mants.length&&!hechas.length)h+="<div class='card'><p class='muted' style='margin:0'>Todavía no hay services registrados para este vehículo.</p></div>";
+  if(!mants.length&&!hechas.length)h+="<div class='card'><p class='muted' style='margin:0'>Todavía no hay services registrados para "+(NAUT||RUBRO==="motos"?"esta ":"este ")+equipo()+".</p></div>";
   // contacto
   var c=[];
   telefonosDe(t.telefono).forEach(function(n){c.push("📱 <a href='tel:"+esc(n.replace(/[^0-9+]/g,""))+"'>"+esc(n)+"</a>")});
